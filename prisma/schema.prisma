@@ -1,0 +1,641 @@
+// prisma/schema.prisma
+// SAMS - School Admission Management System
+// Database: PostgreSQL 16 with Prisma 6
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  APPLICANT
+  SCHOOL_ADMIN
+  SUPER_ADMIN
+}
+
+enum SubscriptionPlan {
+  BASIC
+  STANDARD
+  PREMIUM
+}
+
+enum AdmissionCycleStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ClassLevel {
+  NURSERY
+  PRIMARY
+  JSS1
+  JSS2
+  JSS3
+  SS1
+  SS2
+  SS3
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  APPROVED
+  REJECTED
+  EXAM_SCHEDULED
+  EXAM_COMPLETED
+  ADMITTED
+  NOT_ADMITTED
+  ENROLLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  WAIVED
+  REFUNDED
+  FAILED
+}
+
+enum DocumentType {
+  PASSPORT_PHOTO
+  BIRTH_CERTIFICATE
+  AGE_DECLARATION
+  REPORT_CARD
+  TESTIMONIAL
+  TRANSFER_LETTER
+  HEALTH_RECORD
+  IMMUNIZATION_CARD
+  WAEC_RESULT
+  NECO_RESULT
+  OTHER
+}
+
+enum FormTemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ExamMode {
+  ONLINE
+  ON_CAMPUS
+}
+
+enum ExamSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ExamBookingStatus {
+  BOOKED
+  CHECKED_IN
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  IN_APP
+  PUSH
+}
+
+enum NotificationCategory {
+  APPLICATION_UPDATE
+  EXAM
+  PAYMENT
+  RESULT
+  SYSTEM
+  REMINDER
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum PaymentType {
+  APPLICATION_FEE
+  EXAM_FEE
+  ADMISSION_FEE
+}
+
+enum PaymentGateway {
+  PAYSTACK
+  FLUTTERWAVE
+  BANK_TRANSFER
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+/// School organization (tenant). All data is scoped to an organization.
+model Organization {
+  id              String             @id @default(uuid()) @db.Uuid
+  name            String             @db.VarChar(255)
+  slug            String             @unique @db.VarChar(100)
+  logoUrl         String?            @map("logo_url")
+  primaryColor    String             @default("#1B4332") @map("primary_color") @db.VarChar(7)
+  secondaryColor  String             @default("#2D6A4F") @map("secondary_color") @db.VarChar(7)
+  email           String             @db.VarChar(255)
+  phone           String             @db.VarChar(20)
+  website         String?
+  address         String
+  state           String             @db.VarChar(50)
+  lga             String             @db.VarChar(100)
+  city            String?            @db.VarChar(100)
+  subscriptionPlan SubscriptionPlan  @default(BASIC) @map("subscription_plan")
+  isActive        Boolean            @default(true) @map("is_active")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+
+  branches        Branch[]
+  users           User[]
+  admissionCycles AdmissionCycle[]
+  applications    Application[]
+  formTemplates   FormTemplate[]
+  examSessions    ExamSession[]
+  feeStructures   FeeStructure[]
+  payments        Payment[]
+  auditLogs       AuditLog[]
+
+  @@map("organizations")
+}
+
+/// Individual school branch within an organization.
+model Branch {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  name            String       @db.VarChar(255)
+  code            String       @db.VarChar(20)
+  address         String
+  state           String       @db.VarChar(50)
+  lga             String       @db.VarChar(100)
+  city            String       @db.VarChar(100)
+  phone           String       @db.VarChar(20)
+  email           String       @db.VarChar(255)
+  capacity        Int
+  contactPerson   String       @map("contact_person") @db.VarChar(255)
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  users           User[]
+  applications    Application[]
+  formTemplates   FormTemplate[]
+  examSessions    ExamSession[]
+  classCapacities ClassCapacity[]
+  feeStructures   FeeStructure[]
+
+  @@unique([organizationId, code])
+  @@map("branches")
+}
+
+/// Class capacity per branch per admission cycle.
+model ClassCapacity {
+  id               String          @id @default(uuid()) @db.Uuid
+  branchId         String          @map("branch_id") @db.Uuid
+  admissionCycleId String          @map("admission_cycle_id") @db.Uuid
+  classLevel       ClassLevel      @map("class_level")
+  capacity         Int
+  enrolled         Int             @default(0)
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  branch           Branch          @relation(fields: [branchId], references: [id])
+  admissionCycle   AdmissionCycle  @relation(fields: [admissionCycleId], references: [id])
+
+  @@unique([branchId, admissionCycleId, classLevel])
+  @@map("class_capacities")
+}
+
+/// User account for all roles (applicant, school admin, super admin).
+model User {
+  id                String       @id @default(uuid()) @db.Uuid
+  email             String       @unique @db.VarChar(255)
+  phone             String?      @unique @db.VarChar(20)
+  passwordHash      String       @map("password_hash")
+  role              UserRole
+  firstName         String       @map("first_name") @db.VarChar(100)
+  lastName          String       @map("last_name") @db.VarChar(100)
+  avatarUrl         String?      @map("avatar_url")
+  emailVerified     Boolean      @default(false) @map("email_verified")
+  phoneVerified     Boolean      @default(false) @map("phone_verified")
+  twoFactorEnabled  Boolean      @default(false) @map("two_factor_enabled")
+  twoFactorSecret   String?      @map("two_factor_secret")
+  organizationId    String?      @map("organization_id") @db.Uuid
+  branchId          String?      @map("branch_id") @db.Uuid
+  isActive          Boolean      @default(true) @map("is_active")
+  lastLoginAt       DateTime?    @map("last_login_at")
+  lastLoginIp       String?      @map("last_login_ip") @db.VarChar(45)
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil       DateTime?    @map("locked_until")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  deletedAt         DateTime?    @map("deleted_at")
+
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+  branch            Branch?       @relation(fields: [branchId], references: [id])
+  applicantProfile  ApplicantProfile?
+  applications      Application[] @relation("Applicant")
+  reviewedApps      Application[] @relation("Reviewer")
+  gradedResults     ExamResult[]  @relation("Grader")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  sessions          UserSession[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+/// Extended profile for applicant users (parent/guardian details).
+model ApplicantProfile {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @unique @map("user_id") @db.Uuid
+  // Guardian details
+  guardianTitle       String?  @map("guardian_title") @db.VarChar(20) // Mr, Mrs, Dr, Chief, etc.
+  occupation          String?  @db.VarChar(255)
+  employer            String?  @db.VarChar(255)
+  officeAddress       String?  @map("office_address")
+  // Contact
+  secondaryPhone      String?  @map("secondary_phone") @db.VarChar(20)
+  // Address
+  residentialAddress  String?  @map("residential_address")
+  state               String?  @db.VarChar(50)
+  lga                 String?  @db.VarChar(100)
+  city                String?  @db.VarChar(100)
+  // Emergency contact
+  emergencyContactName  String?  @map("emergency_contact_name") @db.VarChar(255)
+  emergencyContactPhone String?  @map("emergency_contact_phone") @db.VarChar(20)
+  emergencyContactRelation String? @map("emergency_contact_relation") @db.VarChar(50)
+  // Consent
+  dataConsentGiven    Boolean  @default(false) @map("data_consent_given")
+  dataConsentDate     DateTime? @map("data_consent_date")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("applicant_profiles")
+}
+
+/// User session tracking for security.
+model UserSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  token        String   @unique @db.VarChar(500)
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("user_sessions")
+}
+
+/// Admission cycle (academic session period).
+model AdmissionCycle {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  name            String                @db.VarChar(255) // e.g., "2026/2027 Academic Session"
+  academicYear    String                @map("academic_year") @db.VarChar(9) // e.g., "2026/2027"
+  startDate       DateTime              @map("start_date") @db.Date
+  endDate         DateTime              @map("end_date") @db.Date
+  status          AdmissionCycleStatus  @default(DRAFT)
+  isDefault       Boolean               @default(false) @map("is_default")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  applications    Application[]
+  examSessions    ExamSession[]
+  classCapacities ClassCapacity[]
+  feeStructures   FeeStructure[]
+
+  @@index([organizationId, status])
+  @@map("admission_cycles")
+}
+
+/// Fee structure per class, branch, and cycle.
+model FeeStructure {
+  id               String          @id @default(uuid()) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  branchId         String?         @map("branch_id") @db.Uuid // null = applies to all branches
+  admissionCycleId String          @map("admission_cycle_id") @db.Uuid
+  classLevel       ClassLevel?     @map("class_level") // null = applies to all classes
+  paymentType      PaymentType     @map("payment_type")
+  amountKobo       Int             @map("amount_kobo") // Amount in kobo (100 kobo = 1 Naira)
+  currency         String          @default("NGN") @db.VarChar(3)
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  branch           Branch?         @relation(fields: [branchId], references: [id])
+  admissionCycle   AdmissionCycle  @relation(fields: [admissionCycleId], references: [id])
+
+  @@map("fee_structures")
+}
+
+/// Student admission application.
+model Application {
+  id                String            @id @default(uuid()) @db.Uuid
+  applicationNumber String            @unique @map("application_number") @db.VarChar(20)
+  applicantId       String            @map("applicant_id") @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  branchId          String            @map("branch_id") @db.Uuid
+  admissionCycleId  String            @map("admission_cycle_id") @db.Uuid
+  classApplied      ClassLevel        @map("class_applied")
+  formTemplateId    String?           @map("form_template_id") @db.Uuid
+  status            ApplicationStatus @default(DRAFT)
+  // Student details (core, always present)
+  studentFirstName  String?           @map("student_first_name") @db.VarChar(100)
+  studentLastName   String?           @map("student_last_name") @db.VarChar(100)
+  studentMiddleName String?           @map("student_middle_name") @db.VarChar(100)
+  studentDob        DateTime?         @map("student_dob") @db.Date
+  studentGender     String?           @map("student_gender") @db.VarChar(10)
+  studentNationality String?          @map("student_nationality") @db.VarChar(50)
+  studentStateOfOrigin String?        @map("student_state_of_origin") @db.VarChar(50)
+  studentLga        String?           @map("student_lga") @db.VarChar(100)
+  previousSchool    String?           @map("previous_school") @db.VarChar(255)
+  previousSchoolAddress String?       @map("previous_school_address")
+  // Dynamic form data (from form builder)
+  formData          Json              @default("{}") @map("form_data")
+  // Review
+  adminNotes        String?           @map("admin_notes")
+  rejectionReason   String?           @map("rejection_reason")
+  revisionFeedback  Json?             @map("revision_feedback") // { fieldName: "feedback message" }
+  reviewedBy        String?           @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?         @map("reviewed_at")
+  submittedAt       DateTime?         @map("submitted_at")
+  // Payment
+  paymentStatus     PaymentStatus     @default(PENDING) @map("payment_status")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  deletedAt         DateTime?         @map("deleted_at")
+
+  applicant         User              @relation("Applicant", fields: [applicantId], references: [id])
+  reviewer          User?             @relation("Reviewer", fields: [reviewedBy], references: [id])
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  admissionCycle    AdmissionCycle    @relation(fields: [admissionCycleId], references: [id])
+  formTemplate      FormTemplate?     @relation(fields: [formTemplateId], references: [id])
+  documents         ApplicationDocument[]
+  examBookings      ExamBooking[]
+  examResults       ExamResult[]
+  payments          Payment[]
+  statusHistory     ApplicationStatusHistory[]
+
+  @@index([applicantId, admissionCycleId])
+  @@index([branchId, status])
+  @@index([organizationId, status])
+  @@index([applicationNumber])
+  @@map("applications")
+}
+
+/// Tracks all status changes for an application (audit trail).
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  applicationId String            @map("application_id") @db.Uuid
+  fromStatus    ApplicationStatus? @map("from_status")
+  toStatus      ApplicationStatus @map("to_status")
+  changedBy     String?           @map("changed_by") @db.Uuid // null for system-triggered
+  reason        String?
+  metadata      Json?             // Additional context
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_status_history")
+}
+
+/// Documents uploaded as part of an application.
+model ApplicationDocument {
+  id                String       @id @default(uuid()) @db.Uuid
+  applicationId     String       @map("application_id") @db.Uuid
+  documentType      DocumentType @map("document_type")
+  fileName          String       @map("file_name") @db.VarChar(255)
+  fileUrl           String       @map("file_url")
+  fileSize          Int          @map("file_size") // bytes
+  mimeType          String       @map("mime_type") @db.VarChar(100)
+  isVerified        Boolean      @default(false) @map("is_verified")
+  verificationNote  String?      @map("verification_note")
+  uploadedAt        DateTime     @default(now()) @map("uploaded_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  application       Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_documents")
+}
+
+/// Dynamic form template created by admin.
+model FormTemplate {
+  id              String             @id @default(uuid()) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  branchId        String?            @map("branch_id") @db.Uuid
+  name            String             @db.VarChar(255)
+  description     String?
+  classLevel      ClassLevel?        @map("class_level")
+  schema          Json               // JSON Schema-based form definition
+  version         Int                @default(1)
+  status          FormTemplateStatus @default(DRAFT)
+  isDefault       Boolean            @default(false) @map("is_default")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  branch          Branch?            @relation(fields: [branchId], references: [id])
+  applications    Application[]
+
+  @@index([organizationId, classLevel, status])
+  @@map("form_templates")
+}
+
+/// Examination session created by admin.
+model ExamSession {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  branchId         String            @map("branch_id") @db.Uuid
+  admissionCycleId String            @map("admission_cycle_id") @db.Uuid
+  title            String            @db.VarChar(255)
+  description      String?
+  examDate         DateTime          @map("exam_date") @db.Date
+  startTime        String            @map("start_time") @db.VarChar(5) // "09:00" format
+  endTime          String            @map("end_time") @db.VarChar(5)
+  durationMinutes  Int               @map("duration_minutes")
+  mode             ExamMode
+  venue            String?           // Physical location for ON_CAMPUS
+  onlineLink       String?           @map("online_link") // Link for ONLINE mode
+  capacity         Int
+  bookedCount      Int               @default(0) @map("booked_count")
+  classLevels      ClassLevel[]      @map("class_levels") // Which classes this exam is for
+  status           ExamSessionStatus @default(SCHEDULED)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  admissionCycle   AdmissionCycle    @relation(fields: [admissionCycleId], references: [id])
+  bookings         ExamBooking[]
+
+  @@index([branchId, examDate])
+  @@index([organizationId, status])
+  @@map("exam_sessions")
+}
+
+/// Applicant's exam session booking.
+model ExamBooking {
+  id             String            @id @default(uuid()) @db.Uuid
+  applicationId  String            @map("application_id") @db.Uuid
+  examSessionId  String            @map("exam_session_id") @db.Uuid
+  seatNumber     String?           @map("seat_number") @db.VarChar(10)
+  qrCode         String            @unique @map("qr_code")
+  checkInTime    DateTime?         @map("check_in_time")
+  status         ExamBookingStatus @default(BOOKED)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  application    Application       @relation(fields: [applicationId], references: [id])
+  examSession    ExamSession       @relation(fields: [examSessionId], references: [id])
+  result         ExamResult?
+
+  @@unique([applicationId, examSessionId])
+  @@index([examSessionId])
+  @@map("exam_bookings")
+}
+
+/// Exam result for an applicant.
+model ExamResult {
+  id              String      @id @default(uuid()) @db.Uuid
+  examBookingId   String      @unique @map("exam_booking_id") @db.Uuid
+  applicationId   String      @map("application_id") @db.Uuid
+  totalScore      Decimal     @map("total_score") @db.Decimal(5, 2)
+  maxScore        Decimal     @map("max_score") @db.Decimal(5, 2)
+  percentage      Decimal     @db.Decimal(5, 2)
+  grade           String?     @db.VarChar(5)
+  scoreBreakdown  Json        @map("score_breakdown") // { "Mathematics": 80, "English": 75, ... }
+  isPassed        Boolean     @map("is_passed")
+  remarks         String?
+  isPublished     Boolean     @default(false) @map("is_published")
+  publishedAt     DateTime?   @map("published_at")
+  gradedBy        String?     @map("graded_by") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  examBooking     ExamBooking @relation(fields: [examBookingId], references: [id])
+  application     Application @relation(fields: [applicationId], references: [id])
+  grader          User?       @relation("Grader", fields: [gradedBy], references: [id])
+
+  @@index([applicationId])
+  @@map("exam_results")
+}
+
+/// Payment transaction record.
+model Payment {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
+  applicationId   String         @map("application_id") @db.Uuid
+  paymentType     PaymentType    @map("payment_type")
+  amountKobo      Int            @map("amount_kobo")
+  currency        String         @default("NGN") @db.VarChar(3)
+  gateway         PaymentGateway
+  gatewayReference String?       @map("gateway_reference") @db.VarChar(255)
+  gatewayResponse Json?          @map("gateway_response")
+  status          PaymentStatus  @default(PENDING)
+  paidAt          DateTime?      @map("paid_at")
+  receiptUrl      String?        @map("receipt_url")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  application     Application    @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId])
+  @@index([gatewayReference])
+  @@map("payments")
+}
+
+/// User notification.
+model Notification {
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  type            NotificationType
+  category        NotificationCategory
+  title           String               @db.VarChar(255)
+  message         String
+  data            Json?                // Structured metadata (e.g., applicationId, link)
+  isRead          Boolean              @default(false) @map("is_read")
+  readAt          DateTime?            @map("read_at")
+  deliveryStatus  DeliveryStatus       @default(PENDING) @map("delivery_status")
+  sentAt          DateTime?            @map("sent_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Audit log for all admin actions.
+model AuditLog {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  organizationId  String?       @map("organization_id") @db.Uuid
+  action          String        @db.VarChar(100) // e.g., "APPLICATION_APPROVED"
+  entityType      String        @map("entity_type") @db.VarChar(50) // e.g., "Application"
+  entityId        String        @map("entity_id") @db.Uuid
+  changes         Json?         // { before: {...}, after: {...} }
+  ipAddress       String        @map("ip_address") @db.VarChar(45)
+  userAgent       String?       @map("user_agent")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  user            User          @relation(fields: [userId], references: [id])
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+/// Email verification and password reset tokens.
+model VerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @db.VarChar(255)
+  token     String   @db.VarChar(10) // OTP code
+  type      String   @db.VarChar(20) // "email_verify", "phone_verify", "password_reset"
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, token, type])
+  @@map("verification_tokens")
+}
