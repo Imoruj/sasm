@@ -7,7 +7,12 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(echo \"DONE $?\")",
       "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)",
-      "Bash(where vercel *)"
+      "Bash(where vercel *)",
+      "Bash(gh auth *)",
+      "Bash(vercel whoami *)",
+      "Bash(vercel --yes --prod)",
+      "Bash(vercel link *)",
+      "Bash(vercel --yes --prod --scope josephs-projects-d429a6bf)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Edunostics\\Desktop\\BEETER\\SAMS\\src\\app\\api\\applications\\[id]",
