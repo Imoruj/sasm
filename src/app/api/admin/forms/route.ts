@@ -7,7 +7,7 @@ import type { ApiResponse } from "@/types/api";
 const createSchema = z.object({
   name:          z.string().min(2).max(255),
   description:   z.string().optional(),
-  classLevel:    z.string().nullable().optional(),
+  classLevels:   z.array(z.string()).optional().default([]),
   enabledFields: z.array(z.string()).optional(),
   schema:        z.record(z.unknown()).optional().default({}),
   status:        z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"),
@@ -26,8 +26,9 @@ export async function GET() {
   const templates = await db.formTemplate.findMany({
     where: {
       organizationId: session.user.organizationId ?? "",
+      // Branch admins only see templates for their own branch
       ...(session.user.branchId
-        ? { OR: [{ branchId: session.user.branchId }, { branchId: null }] }
+        ? { branchId: session.user.branchId }
         : {}),
     },
     orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { classLevel, enabledFields, schema, ...rest } = parsed.data;
+  const { classLevels, enabledFields, schema, ...rest } = parsed.data;
 
   // Merge enabledFields into schema if provided
   const mergedSchema = enabledFields !== undefined
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     data: {
       ...rest,
       schema:         mergedSchema as never,
-      classLevel:     (classLevel ?? null) as never,
+      classLevels:    classLevels as never,
       organizationId: session.user.organizationId ?? "",
       branchId:       session.user.branchId ?? null,
     },

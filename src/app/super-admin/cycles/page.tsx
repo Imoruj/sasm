@@ -1,18 +1,28 @@
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
 import PageHeader from "@/components/shared/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
+import CyclesManager from "./CyclesManager";
 
-export default function Page() {
+export default async function CyclesPage() {
+  const session = await auth();
+  const orgId = session!.user.organizationId ?? "";
+
+  const cycles = await db.admissionCycle.findMany({
+    where: { organizationId: orgId },
+    include: {
+      _count: { select: { applications: true, examSessions: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   return (
     <div>
       <PageHeader
         title="Admission Cycles"
+        description="Manage academic year admission periods"
         breadcrumbs={[{ label: "Super Admin", href: "/super-admin" }, { label: "Admission Cycles" }]}
       />
-      <Card>
-        <CardContent className="py-16 text-center text-gray-400">
-          <p>Admission Cycles — coming soon</p>
-        </CardContent>
-      </Card>
+      <CyclesManager initialCycles={cycles} />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, toZonedTime } from "date-fns-tz";
-import { customAlphabet } from "nanoid";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -29,12 +28,30 @@ export function formatDateTime(date: Date | string): string {
   return formatDate(date, "dd MMM yyyy, h:mm a");
 }
 
-const nanoidGen = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 6);
+/** Extract initials from an organisation/branch name (e.g. "Trinitate International School" → "TIS") */
+export function nameInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
 
-/** Generate application number like SAMS-2026-AB1234 */
-export function generateApplicationNumber(): string {
+/**
+ * Build an application number in the format:
+ *   {ORG_INITIALS}-{BRANCH_INITIAL}-{YEAR}-{NNNN}
+ *   e.g. TIS-B-2026-0001
+ */
+export function buildApplicationNumber(
+  orgName: string,
+  branchName: string,
+  sequence: number,
+): string {
   const year = new Date().getFullYear();
-  return `SAMS-${year}-${nanoidGen()}`;
+  const orgCode = nameInitials(orgName);
+  const branchCode = branchName.trim()[0].toUpperCase();
+  const seq = String(sequence).padStart(4, "0");
+  return `${orgCode}-${branchCode}-${year}-${seq}`;
 }
 
 /** Convert Nigerian phone to E.164 format */

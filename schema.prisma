@@ -135,6 +135,7 @@ enum PaymentType {
   APPLICATION_FEE
   EXAM_FEE
   ADMISSION_FEE
+  ONLINE_TEST_FEE
 }
 
 enum PaymentGateway {
@@ -163,6 +164,7 @@ model Organization {
   lga             String             @db.VarChar(100)
   city            String?            @db.VarChar(100)
   subscriptionPlan SubscriptionPlan  @default(BASIC) @map("subscription_plan")
+  settings        Json?              @default("{}")
   isActive        Boolean            @default(true) @map("is_active")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
@@ -251,6 +253,7 @@ model User {
   lastLoginIp       String?      @map("last_login_ip") @db.VarChar(45)
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedUntil       DateTime?    @map("locked_until")
+  permissions       Json?        @map("permissions") @db.JsonB
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
   deletedAt         DateTime?    @map("deleted_at")
@@ -394,7 +397,10 @@ model Application {
   reviewedAt        DateTime?         @map("reviewed_at")
   submittedAt       DateTime?         @map("submitted_at")
   // Payment
-  paymentStatus     PaymentStatus     @default(PENDING) @map("payment_status")
+  paymentStatus       PaymentStatus   @default(PENDING) @map("payment_status")
+  paymentEvidenceUrl  String?         @map("payment_evidence_url")
+  paymentConfirmedAt  DateTime?       @map("payment_confirmed_at")
+  paymentConfirmedBy  String?         @map("payment_confirmed_by") @db.Uuid
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   deletedAt         DateTime?         @map("deleted_at")
@@ -462,7 +468,7 @@ model FormTemplate {
   branchId        String?            @map("branch_id") @db.Uuid
   name            String             @db.VarChar(255)
   description     String?
-  classLevel      ClassLevel?        @map("class_level")
+  classLevels     ClassLevel[]       @map("class_levels") @default([])
   schema          Json               // JSON Schema-based form definition
   version         Int                @default(1)
   status          FormTemplateStatus @default(DRAFT)
@@ -474,7 +480,7 @@ model FormTemplate {
   branch          Branch?            @relation(fields: [branchId], references: [id])
   applications    Application[]
 
-  @@index([organizationId, classLevel, status])
+  @@index([organizationId, status])
   @@map("form_templates")
 }
 
@@ -487,6 +493,7 @@ model ExamSession {
   title            String            @db.VarChar(255)
   description      String?
   examDate         DateTime          @map("exam_date") @db.Date
+  examDates        DateTime[]        @map("exam_dates") @db.Date // All available session dates for parent selection
   startTime        String            @map("start_time") @db.VarChar(5) // "09:00" format
   endTime          String            @map("end_time") @db.VarChar(5)
   durationMinutes  Int               @map("duration_minutes")
@@ -515,6 +522,7 @@ model ExamBooking {
   id             String            @id @default(uuid()) @db.Uuid
   applicationId  String            @map("application_id") @db.Uuid
   examSessionId  String            @map("exam_session_id") @db.Uuid
+  bookedDate     DateTime?         @map("booked_date") @db.Date // The specific date chosen by the applicant
   seatNumber     String?           @map("seat_number") @db.VarChar(10)
   qrCode         String            @unique @map("qr_code")
   checkInTime    DateTime?         @map("check_in_time")

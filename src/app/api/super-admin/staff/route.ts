@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
+import { sendStaffWelcomeEmail } from "@/lib/email";
 
 const LIMIT = 20;
 
@@ -15,6 +16,14 @@ const createStaffSchema = z.object({
   role: z.enum(["SCHOOL_ADMIN", "SUPER_ADMIN"]),
   branchId: z.string().uuid("Invalid branch ID").optional(),
   temporaryPassword: z.string().min(8, "Password must be at least 8 characters"),
+  permissions: z.object({
+    applications: z.boolean().optional(),
+    forms:         z.boolean().optional(),
+    exams:         z.boolean().optional(),
+    communications:z.boolean().optional(),
+    reports:       z.boolean().optional(),
+    settings:      z.boolean().optional(),
+  }).optional(),
 });
 
 export async function GET(req: Request) {
@@ -45,25 +54,12 @@ export async function GET(req: Request) {
       db.user.findMany({
         where,
         select: {
-          id: true,
-          email: true,
-          phone: true,
-          role: true,
-          firstName: true,
-          lastName: true,
-          avatarUrl: true,
-          emailVerified: true,
-          organizationId: true,
-          branchId: true,
-          isActive: true,
-          lastLoginAt: true,
-          createdAt: true,
-          branch: {
-            select: {
-              name: true,
-              code: true,
-            },
-          },
+          id: true, email: true, phone: true, role: true,
+          firstName: true, lastName: true, avatarUrl: true,
+          emailVerified: true, organizationId: true, branchId: true,
+          isActive: true, lastLoginAt: true, createdAt: true,
+          permissions: true,
+          branch: { select: { name: true, code: true } },
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -72,7 +68,9 @@ export async function GET(req: Request) {
       db.user.count({ where }),
     ]);
 
-    return NextResponse.json(ok({ staff, total }));
+    const staffWithPerms = staff.map((s) => ({ ...s }));
+
+    return NextResponse.json(ok({ staff: staffWithPerms, total }));
   } catch (error) {
     console.error("[GET_STAFF]", error);
     return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });
@@ -98,7 +96,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { email, firstName, lastName, phone, role, branchId, temporaryPassword } = validated.data;
+    const { email, firstName, lastName, phone, role, branchId, temporaryPassword, permissions } = validated.data;
 
     // School admins must have a branch assigned
     if (role === "SCHOOL_ADMIN" && !branchId) {
@@ -140,8 +138,9 @@ export async function POST(req: Request) {
           passwordHash,
           organizationId: session.user.organizationId,
           branchId: branchId ?? null,
-          emailVerified: false,
+          emailVerified: true, // Admin-created accounts are pre-verified
           isActive: true,
+          permissions: permissions ? (permissions as never) : undefined,
         },
         select: {
           id: true,
@@ -157,6 +156,7 @@ export async function POST(req: Request) {
           isActive: true,
           lastLoginAt: true,
           createdAt: true,
+          permissions: true,
           branch: {
             select: {
               name: true,
@@ -189,7 +189,45 @@ export async function POST(req: Request) {
       data: { entityId: newStaff.id },
     });
 
-    return NextResponse.json(ok(newStaff), { status: 201 });
+    // Send welcome email with login credentials
+    const org = await db.organization.findUnique({
+      where: { id: session.user.organizationId ?? "" },
+      select: { name: true },
+    });
+    const branchName = newStaff.branch?.name ?? null;
+    const orgName = org?.name ?? "School";
+
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    try {
+      // In Resend sandbox mode (onboarding@resend.dev), only the account owner's
+      // email can receive. Fall back to the RESEND_TEST_EMAIL env var if set,
+      // otherwise send to the actual staff email.
+      const recipientEmail = process.env.RESEND_TEST_EMAIL
+        ? process.env.RESEND_TEST_EMAIL
+        : newStaff.email;
+
+      await sendStaffWelcomeEmail(
+        recipientEmail,
+        newStaff.firstName,
+        newStaff.lastName,
+        temporaryPassword,
+        newStaff.role as "SCHOOL_ADMIN" | "SUPER_ADMIN",
+        branchName,
+        orgName,
+      );
+      emailSent = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      emailError = msg;
+      console.error("[STAFF_WELCOME_EMAIL]", msg);
+    }
+
+    return NextResponse.json(
+      ok({ ...newStaff, emailSent, emailError }),
+      { status: 201 },
+    );
   } catch (error) {
     console.error("[CREATE_STAFF]", error);
     return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });

@@ -149,9 +149,12 @@ export async function DELETE(
 
     const { id } = await params;
     const organizationId = session.user.organizationId ?? "";
+    const url = new URL(req.url);
+    const permanent = url.searchParams.get("permanent") === "true";
 
     const branch = await db.branch.findFirst({
       where: { id, organizationId },
+      include: { _count: { select: { applications: true } } },
     });
 
     if (!branch) {
@@ -161,6 +164,39 @@ export async function DELETE(
       );
     }
 
+    // Hard delete
+    if (permanent) {
+      if (branch._count.applications > 0) {
+        return NextResponse.json(
+          err(
+            "CONFLICT",
+            `Cannot delete this branch — it has ${branch._count.applications} application(s) linked to it. Deactivate it instead.`
+          ),
+          { status: 409 }
+        );
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.branch.delete({ where: { id } });
+
+        await tx.auditLog.create({
+          data: {
+            userId: session.user.id,
+            organizationId,
+            action: "BRANCH_DELETED",
+            entityType: "Branch",
+            entityId: id,
+            changes: { deleted: branch },
+            ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+            userAgent: req.headers.get("user-agent") ?? "",
+          },
+        });
+      });
+
+      return NextResponse.json(ok({ id, deleted: true }));
+    }
+
+    // Soft deactivate
     if (!branch.isActive) {
       return NextResponse.json(
         err("ALREADY_INACTIVE", "Branch is already inactive"),
@@ -192,7 +228,7 @@ export async function DELETE(
 
     return NextResponse.json(ok(deactivated));
   } catch (error) {
-    console.error("[DEACTIVATE_BRANCH]", error);
+    console.error("[BRANCH_DELETE]", error);
     return NextResponse.json(
       err("INTERNAL_ERROR", "Something went wrong."),
       { status: 500 }

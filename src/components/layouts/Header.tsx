@@ -61,7 +61,7 @@ export default function Header({ userName, userEmail, userAvatar, userRole, unre
 
         {/* User menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-gray-100 transition-colors outline-none">
+          <DropdownMenuTrigger suppressHydrationWarning className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-gray-100 transition-colors outline-none">
             <Avatar className="h-8 w-8">
               <AvatarImage src={userAvatar ?? undefined} alt={userName} />
               <AvatarFallback className="bg-[#1B4332] text-white text-xs">

@@ -8,14 +8,22 @@ async function main() {
 
   // Create demo organisation
   const org = await db.organization.upsert({
-    where: { slug: "greenfield-schools" },
-    update: {},
-    create: {
-      name: "Greenfield Schools",
-      slug: "greenfield-schools",
-      email: "admin@greenfieldschools.edu.ng",
+    where: { slug: "trinitate-international-school" },
+    update: {
+      name: "Trinitate International School",
+      email: "admin@trinitateintl.edu.ng",
       phone: "+2348012345678",
-      address: "12 Education Way, Victoria Island",
+      primaryColor: "#1B4332",
+      secondaryColor: "#2D6A4F",
+      subscriptionPlan: "PREMIUM",
+      isActive: true,
+    },
+    create: {
+      name: "Trinitate International School",
+      slug: "trinitate-international-school",
+      email: "admin@trinitateintl.edu.ng",
+      phone: "+2348012345678",
+      address: "1 Trinitate Close, Victoria Island, Lagos",
       state: "Lagos",
       lga: "Lagos Island",
       city: "Lagos",
@@ -28,22 +36,52 @@ async function main() {
 
   console.log("✅ Organisation created:", org.name);
 
-  // Create branches
+  // Create branches — Trinitate operates three campuses
+  // Boarding School: JSS1–SS3 only
+  // Day School: Nursery–SS3
+  // Metro Campus: Nursery–SS3
   const branchData = [
-    { name: "Greenfield Victoria Island", code: "GF-VI", state: "Lagos", lga: "Lagos Island", city: "Victoria Island", address: "12 Education Way, V/I", capacity: 200 },
-    { name: "Greenfield Lekki", code: "GF-LK", state: "Lagos", lga: "Eti Osa", city: "Lekki", address: "5 Admiralty Way, Lekki Phase 1", capacity: 150 },
-    { name: "Greenfield Abuja", code: "GF-ABJ", state: "FCT", lga: "Municipal Area Council", city: "Abuja", address: "Plot 10, Wuse Zone 5, Abuja", capacity: 100 },
+    // Boarding School — JSS 1 – SS 3 only
+    {
+      name: "Boarding School",
+      code: "TIS-BOARDING",
+      state: "Lagos",
+      lga: "Lagos Island",
+      city: "Victoria Island",
+      address: "1 Trinitate Close, Victoria Island, Lagos",
+      capacity: 300,
+    },
+    // Day School — Nursery – SS 3
+    {
+      name: "Day School",
+      code: "TIS-DAY",
+      state: "Lagos",
+      lga: "Lagos Island",
+      city: "Victoria Island",
+      address: "1 Trinitate Close, Victoria Island, Lagos",
+      capacity: 400,
+    },
+    // Metro Campus — Nursery – SS 3
+    {
+      name: "Metro Campus",
+      code: "TIS-METRO",
+      state: "Lagos",
+      lga: "Eti Osa",
+      city: "Lekki",
+      address: "5 Metro Drive, Lekki Phase 1, Lagos",
+      capacity: 350,
+    },
   ];
 
   const branches = [];
   for (const b of branchData) {
     const branch = await db.branch.upsert({
       where: { organizationId_code: { organizationId: org.id, code: b.code } },
-      update: {},
+      update: { name: b.name, address: b.address, capacity: b.capacity, isActive: true },
       create: {
         organizationId: org.id,
         phone: "+2348012345678",
-        email: `${b.code.toLowerCase()}@greenfieldschools.edu.ng`,
+        email: `${b.code.toLowerCase()}@trinitateintl.edu.ng`,
         contactPerson: "Principal",
         isActive: true,
         ...b,
@@ -97,12 +135,12 @@ async function main() {
 
   // Create super admin
   const superAdmin = await db.user.upsert({
-    where: { email: "superadmin@greenfieldschools.edu.ng" },
+    where: { email: "superadmin@trinitateintl.edu.ng" },
     update: {},
     create: {
-      email: "superadmin@greenfieldschools.edu.ng",
-      firstName: "Emeka",
-      lastName: "Okafor",
+      email: "superadmin@trinitateintl.edu.ng",
+      firstName: "Trinitate",
+      lastName: "Admin",
       passwordHash: superHash,
       role: "SUPER_ADMIN",
       organizationId: org.id,
@@ -112,18 +150,18 @@ async function main() {
   });
   console.log("✅ Super admin created:", superAdmin.email);
 
-  // Create branch admin
+  // Create branch admin (assigned to Boarding School by default)
   const branchAdmin = await db.user.upsert({
-    where: { email: "admin.vi@greenfieldschools.edu.ng" },
+    where: { email: "admin.boarding@trinitateintl.edu.ng" },
     update: {},
     create: {
-      email: "admin.vi@greenfieldschools.edu.ng",
-      firstName: "Amaka",
-      lastName: "Nwosu",
+      email: "admin.boarding@trinitateintl.edu.ng",
+      firstName: "Boarding",
+      lastName: "Admin",
       passwordHash: adminHash,
       role: "SCHOOL_ADMIN",
       organizationId: org.id,
-      branchId: branches[0].id,
+      branchId: branches[0].id, // Boarding School
       emailVerified: true,
       isActive: true,
     },
@@ -727,9 +765,9 @@ async function main() {
 
   console.log("\n🎉 Seed complete!");
   console.log("\nDemo credentials:");
-  console.log("  Super Admin:  superadmin@greenfieldschools.edu.ng / SuperAdmin@1234");
-  console.log("  Branch Admin: admin.vi@greenfieldschools.edu.ng   / Admin@1234");
-  console.log("  Applicant:    parent@example.com                  / Applicant@1234");
+  console.log("  Super Admin:  superadmin@trinitateintl.edu.ng       / SuperAdmin@1234");
+  console.log("  Branch Admin: admin.boarding@trinitateintl.edu.ng   / Admin@1234");
+  console.log("  Applicant:    parent@example.com                    / Applicant@1234");
 }
 
 main()

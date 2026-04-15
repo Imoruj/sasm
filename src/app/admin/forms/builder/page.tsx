@@ -16,7 +16,7 @@ export default async function FormBuilderPage({ searchParams }: Props) {
     id:           string;
     name:         string;
     description:  string | null;
-    classLevel:   string | null;
+    classLevels:  string[];
     status:       "DRAFT" | "PUBLISHED" | "ARCHIVED";
     schema:       unknown;
   } | null = null;
@@ -24,7 +24,7 @@ export default async function FormBuilderPage({ searchParams }: Props) {
   if (id) {
     template = await db.formTemplate.findFirst({
       where: { id, organizationId: session!.user.organizationId ?? "" },
-      select: { id: true, name: true, description: true, classLevel: true, status: true, schema: true },
+      select: { id: true, name: true, description: true, classLevels: true, status: true, schema: true },
     });
   }
 
@@ -47,7 +47,7 @@ export default async function FormBuilderPage({ searchParams }: Props) {
         templateId={template?.id}
         initialName={template?.name ?? "Standard Admission Form"}
         initialDescription={template?.description ?? ""}
-        initialClassLevel={template?.classLevel ?? null}
+        initialClassLevels={template?.classLevels ?? []}
         initialStatus={template?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT"}
         initialEnabledFields={enabledFields}
       />

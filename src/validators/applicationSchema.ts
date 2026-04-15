@@ -1,9 +1,16 @@
 import { z } from "zod";
 import { NIGERIAN_PHONE_REGEX } from "@/constants";
 
+const optionalUuid = (message: string) =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().uuid(message).optional(),
+  );
+
 export const createApplicationSchema = z.object({
-  branchId: z.string().uuid("Please select a branch"),
-  admissionCycleId: z.string().uuid("Please select an admission cycle"),
+  templateId: z.string().uuid("A published application template is required"),
+  branchId: optionalUuid("Please select a branch"),
+  admissionCycleId: optionalUuid("Please select an admission cycle"),
   classApplied: z.enum(["NURSERY", "PRIMARY", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]),
 });
 

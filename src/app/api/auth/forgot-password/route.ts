@@ -36,7 +36,8 @@ export async function POST(req: Request) {
     });
 
     try {
-      await sendPasswordResetEmail(email, otp, user.firstName);
+      const org = await db.organization.findFirst({ select: { name: true } });
+      await sendPasswordResetEmail(email, otp, user.firstName, org?.name ?? "SAMS");
     } catch {
       // Don't fail silently in prod - but don't expose error to client
     }

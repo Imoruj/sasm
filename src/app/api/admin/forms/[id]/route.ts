@@ -7,11 +7,20 @@ import type { ApiResponse } from "@/types/api";
 const patchSchema = z.object({
   name:           z.string().min(2).max(255).optional(),
   description:    z.string().optional(),
-  classLevel:     z.string().nullable().optional(),
+  classLevels:    z.array(z.string()).optional(),
   enabledFields:  z.array(z.string()).optional(),
   status:         z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
   isDefault:      z.boolean().optional(),
 });
+
+// Branch-scoped where clause: branch admins can only touch their own branch's templates
+function templateWhere(id: string, orgId: string, branchId: string | null | undefined) {
+  return {
+    id,
+    organizationId: orgId,
+    ...(branchId ? { branchId } : {}),
+  };
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -28,7 +37,7 @@ export async function PATCH(
   const { id } = await params;
 
   const existing = await db.formTemplate.findFirst({
-    where: { id, organizationId: session.user.organizationId ?? "" },
+    where: templateWhere(id, session.user.organizationId ?? "", session.user.branchId),
   });
   if (!existing) {
     return NextResponse.json<ApiResponse<never>>(
@@ -46,7 +55,7 @@ export async function PATCH(
     );
   }
 
-  const { enabledFields, classLevel, ...rest } = parsed.data;
+  const { enabledFields, classLevels, ...rest } = parsed.data;
 
   // Merge enabledFields into the schema JSON
   const currentSchema = (existing.schema as Record<string, unknown>) ?? {};
@@ -58,7 +67,7 @@ export async function PATCH(
     where: { id },
     data: {
       ...rest,
-      ...(classLevel !== undefined ? { classLevel: classLevel as never } : {}),
+      ...(classLevels !== undefined ? { classLevels: classLevels as never } : {}),
       schema: newSchema as never,
       version: { increment: 1 },
     },
@@ -82,7 +91,7 @@ export async function DELETE(
   const { id } = await params;
 
   const existing = await db.formTemplate.findFirst({
-    where: { id, organizationId: session.user.organizationId ?? "" },
+    where: templateWhere(id, session.user.organizationId ?? "", session.user.branchId),
   });
   if (!existing) {
     return NextResponse.json<ApiResponse<never>>(

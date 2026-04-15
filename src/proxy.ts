@@ -1,15 +1,17 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { canAccessAdminPath } from "@/lib/staffAccess";
+import type { StaffPermissions } from "@/lib/staffAccess";
 
-const PUBLIC_ROUTES = ["/", "/about", "/contact", "/login", "/register", "/verify", "/forgot-password", "/reset-password"];
 const AUTH_ROUTES = ["/login", "/register", "/verify", "/forgot-password", "/reset-password"];
 
-export default auth((req: NextRequest & { auth: { user?: { role?: string } } | null }) => {
+export default auth((req: NextRequest & { auth: { user?: { role?: string; permissions?: StaffPermissions; branchId?: string | null } } | null }) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
   const isLoggedIn = !!session?.user;
   const role = session?.user?.role;
+  const permissions = (session?.user?.permissions ?? null) as StaffPermissions | null;
 
   // Redirect logged-in users away from auth pages
   if (isLoggedIn && AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
@@ -22,17 +24,28 @@ export default auth((req: NextRequest & { auth: { user?: { role?: string } } | n
     return NextResponse.redirect(new URL(dest, req.url));
   }
 
-  // Protect dashboard routes
-  if (pathname.startsWith("/dashboard")) {
+  // Redirect staff hitting the dashboard root to their own portal
+  if (pathname === "/dashboard" || pathname === "/dashboard/") {
     if (!isLoggedIn) return NextResponse.redirect(new URL("/login", req.url));
-    if (role !== "APPLICANT") return NextResponse.redirect(new URL("/admin", req.url));
+    if (role === "SUPER_ADMIN") return NextResponse.redirect(new URL("/super-admin", req.url));
+    if (role === "SCHOOL_ADMIN") return NextResponse.redirect(new URL("/admin", req.url));
   }
 
-  // Protect admin routes
+  // Protect all other dashboard routes — staff can access sub-pages as applicant parents
+  if (pathname.startsWith("/dashboard")) {
+    if (!isLoggedIn) return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  // Protect admin routes with permission checks
   if (pathname.startsWith("/admin")) {
     if (!isLoggedIn) return NextResponse.redirect(new URL("/login", req.url));
     if (role !== "SCHOOL_ADMIN" && role !== "SUPER_ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    // For school admins, enforce feature-level permissions
+    if (role === "SCHOOL_ADMIN") {
+      const allowed = canAccessAdminPath(pathname, role, permissions);
+      if (!allowed) return NextResponse.redirect(new URL("/admin", req.url));
     }
   }
 

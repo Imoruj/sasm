@@ -13,6 +13,7 @@ export type ExamSessionWithCounts = {
   title: string;
   description: string | null;
   examDate: Date;
+  examDates: Date[];
   startTime: string;
   endTime: string;
   durationMinutes: number;

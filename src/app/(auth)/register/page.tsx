@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [isStaffAccount, setIsStaffAccount] = useState(false);
 
   const {
     register,
@@ -25,6 +26,7 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterInput) => {
     setServerError("");
+    setIsStaffAccount(false);
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -33,7 +35,11 @@ export default function RegisterPage() {
 
     const json = await res.json();
     if (!json.success) {
-      setServerError(json.error?.message ?? "Registration failed. Please try again.");
+      if (json.error?.code === "STAFF_ACCOUNT") {
+        setIsStaffAccount(true);
+      } else {
+        setServerError(json.error?.message ?? "Registration failed. Please try again.");
+      }
       return;
     }
 
@@ -42,9 +48,18 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout title="Create account" description="Start your application journey today">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
         {serverError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{serverError}</div>
+        )}
+        {isStaffAccount && (
+          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+            <p className="font-medium">You have a staff account with this email.</p>
+            <p className="mt-1">Log in with your staff credentials — you can submit applications for your children from the dashboard.</p>
+            <Link href="/login" className="mt-2 inline-block font-semibold underline text-blue-700">
+              Go to Login →
+            </Link>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-3">

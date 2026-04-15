@@ -42,6 +42,7 @@ export async function GET(req: Request) {
           _count: { select: { bookings: true } },
         },
         orderBy: { examDate: "asc" },
+        take: 100,
       }),
       db.examSession.count({ where }),
     ]);
@@ -91,6 +92,13 @@ export async function POST(req: Request) {
       classLevels,
     } = validated.data;
 
+    // examDates from body (multi-date feature); fallback to single examDate
+    const rawDates: string[] = Array.isArray(body.examDates) && body.examDates.length > 0
+      ? body.examDates
+      : [examDate];
+    const examDates = rawDates.map((d: string) => new Date(d));
+    const primaryDate = examDates.sort((a, b) => a.getTime() - b.getTime())[0];
+
     // Verify admission cycle belongs to org
     const cycle = await db.admissionCycle.findFirst({
       where: {
@@ -132,7 +140,8 @@ export async function POST(req: Request) {
           admissionCycleId,
           title,
           description,
-          examDate: new Date(examDate),
+          examDate: primaryDate,
+          examDates,
           startTime,
           endTime,
           durationMinutes,

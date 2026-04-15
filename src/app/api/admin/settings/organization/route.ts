@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { ok, err } from "@/types/api";
+import { adminLimiter } from "@/lib/ratelimit";
 
 const orgSchema = z.object({
   name:           z.string().min(2).max(255),
@@ -17,7 +18,11 @@ const orgSchema = z.object({
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex colour"),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+  const { success } = await adminLimiter.limit(ip);
+  if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
   const session = await auth();
   if (!session?.user || !["SCHOOL_ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
     return NextResponse.json(err("UNAUTHORIZED", "Unauthorized"), { status: 401 });
@@ -41,6 +46,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+  const { success } = await adminLimiter.limit(ip);
+  if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
   const session = await auth();
   if (!session?.user || !["SCHOOL_ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
     return NextResponse.json(err("UNAUTHORIZED", "Unauthorized"), { status: 401 });
@@ -81,7 +90,8 @@ export async function PATCH(req: NextRequest) {
       entityType:     "Organization",
       entityId:       updated.id,
       changes:        { after: parsed.data },
-      ipAddress:      "0.0.0.0",
+      ipAddress:      ip,
+      userAgent:      req.headers.get("user-agent") ?? "",
     },
   }).catch(() => {});
 

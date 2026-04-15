@@ -25,11 +25,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json(err("VALIDATION_ERROR", "Invalid input", validated.error.flatten()), { status: 400 });
     }
 
+    const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+
     const application = await db.application.findFirst({
       where: {
         id,
-        organizationId: session.user.organizationId ?? "",
-        ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        // SUPER_ADMIN can act on any application; SCHOOL_ADMIN is scoped to their org
+        ...(isSuperAdmin ? {} : { organizationId: session.user.organizationId ?? "" }),
       },
       include: {
         applicant: { select: { email: true, firstName: true } },

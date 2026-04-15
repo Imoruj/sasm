@@ -9,7 +9,8 @@ import { applicantLimiter } from "@/lib/ratelimit";
 
 const schema = z.object({
   applicationId: z.string().uuid(),
-  paymentType: z.enum(["APPLICATION_FEE", "EXAM_FEE", "ADMISSION_FEE"]).default("APPLICATION_FEE"),
+  paymentType: z.enum(["APPLICATION_FEE", "EXAM_FEE", "ADMISSION_FEE", "ONLINE_TEST_FEE"]).default("APPLICATION_FEE"),
+  placementTestType: z.enum(["ON_CAMPUS", "ONLINE"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       return NextResponse.json(err("VALIDATION_ERROR", "Invalid input", validated.error.flatten()), { status: 400 });
     }
 
-    const { applicationId, paymentType } = validated.data;
+    const { applicationId, paymentType, placementTestType } = validated.data;
 
     // Load application + applicant + fee structure
     const application = await db.application.findFirst({
@@ -79,6 +80,36 @@ export async function POST(req: Request) {
       );
     }
 
+    // If online placement test selected, look up the surcharge and add it
+    let totalAmountKobo = feeStructure.amountKobo;
+    if (paymentType === "APPLICATION_FEE" && placementTestType === "ONLINE") {
+      const onlineFeeStructure = await db.feeStructure.findFirst({
+        where: {
+          admissionCycleId: application.admissionCycleId,
+          paymentType: "ONLINE_TEST_FEE",
+          isActive: true,
+          OR: [
+            { branchId: application.branchId, classLevel: application.classApplied },
+            { branchId: application.branchId, classLevel: null },
+            { branchId: null, classLevel: application.classApplied },
+            { branchId: null, classLevel: null },
+          ],
+        },
+        orderBy: [{ branchId: "desc" }, { classLevel: "desc" }],
+      });
+      if (onlineFeeStructure) {
+        totalAmountKobo += onlineFeeStructure.amountKobo;
+      }
+    }
+
+    // Persist the placement test preference on the application
+    if (placementTestType) {
+      await db.application.update({
+        where: { id: applicationId },
+        data: { formData: { placementTestType } },
+      });
+    }
+
     // Create a pending Payment record + unique reference
     const reference = `SAMS-${nanoid(12).toUpperCase()}`;
     const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/applications/${applicationId}/payment-callback`;
@@ -88,7 +119,7 @@ export async function POST(req: Request) {
         organizationId: application.organizationId,
         applicationId,
         paymentType,
-        amountKobo: feeStructure.amountKobo,
+        amountKobo: totalAmountKobo,
         gateway: "PAYSTACK",
         gatewayReference: reference,
         status: "PENDING",
@@ -98,13 +129,14 @@ export async function POST(req: Request) {
     // Initialize with Paystack
     const paystackRes = await initializeTransaction({
       email: application.applicant.email,
-      amountKobo: feeStructure.amountKobo,
+      amountKobo: totalAmountKobo,
       reference,
       callbackUrl,
       metadata: {
         paymentId: payment.id,
         applicationId,
         applicationNumber: application.applicationNumber,
+        placementTestType: placementTestType ?? "ON_CAMPUS",
       },
     });
 
@@ -112,7 +144,7 @@ export async function POST(req: Request) {
       ok({
         authorizationUrl: paystackRes.data.authorization_url,
         reference,
-        amountKobo: feeStructure.amountKobo,
+        amountKobo: totalAmountKobo,
       })
     );
   } catch (error) {

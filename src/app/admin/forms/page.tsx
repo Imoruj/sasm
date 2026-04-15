@@ -21,8 +21,9 @@ export default async function FormTemplatesPage() {
   const templates = await db.formTemplate.findMany({
     where: {
       organizationId: session!.user.organizationId ?? "",
+      // Branch admins only see templates for their own branch
       ...(session!.user.branchId
-        ? { OR: [{ branchId: session!.user.branchId }, { branchId: null }] }
+        ? { branchId: session!.user.branchId }
         : {}),
     },
     orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
@@ -102,7 +103,11 @@ export default async function FormTemplatesPage() {
                   {/* Meta chips */}
                   <div className="flex flex-wrap gap-1.5">
                     <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
-                      {tpl.classLevel ? CLASS_LEVEL_CONFIG[tpl.classLevel as ClassLevel].label : "All Classes"}
+                      {tpl.classLevels.length === 0
+                        ? "All Classes"
+                        : tpl.classLevels.length === 1
+                        ? CLASS_LEVEL_CONFIG[tpl.classLevels[0] as ClassLevel]?.label ?? tpl.classLevels[0]
+                        : `${tpl.classLevels.length} classes`}
                     </span>
                     <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
                       {sectionCount} section{sectionCount !== 1 ? "s" : ""}

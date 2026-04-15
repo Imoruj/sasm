@@ -11,6 +11,7 @@ export type ExamSessionForBooking = {
   title: string;
   description: string | null;
   examDate: Date;
+  examDates: Date[];
   startTime: string;
   endTime: string;
   durationMinutes: number;
@@ -31,6 +32,7 @@ export type BookingWithSession = {
   id: string;
   applicationId: string;
   examSessionId: string;
+  bookedDate: Date | null;
   seatNumber: string | null;
   qrCode: string;
   checkInTime: Date | null;

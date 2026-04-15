@@ -40,7 +40,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/dashboard");
   }
 
-  const [org, unreadCount, user] = await Promise.all([
+  const [org, unreadCount, user, branch] = await Promise.all([
     session.user.organizationId
       ? db.organization.findUnique({
           where: { id: session.user.organizationId },
@@ -54,6 +54,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       where: { id: session.user.id },
       select: { avatarUrl: true },
     }),
+    session.user.branchId
+      ? db.branch.findUnique({
+          where: { id: session.user.branchId },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -65,6 +71,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       orgName={org?.name}
       orgLogo={org?.logoUrl}
       unreadCount={unreadCount}
+      permissions={session.user.permissions ?? null}
+      branchName={branch?.name ?? null}
     >
       {children}
     </DashboardLayout>

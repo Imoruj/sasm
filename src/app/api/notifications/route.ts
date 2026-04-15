@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 import { z } from "zod";
+import { applicantLimiter } from "@/lib/ratelimit";
 
 const patchBodySchema = z.object({
   ids: z.array(z.string().uuid()).optional(),
@@ -11,6 +12,10 @@ const patchBodySchema = z.object({
 
 export async function GET(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await applicantLimiter.limit(ip);
+    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
@@ -52,6 +57,10 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await applicantLimiter.limit(ip);
+    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });

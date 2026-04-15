@@ -1,43 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { CreditCard, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function PayButton({ applicationId }: { applicationId: string }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type PaymentType = "APPLICATION_FEE" | "EXAM_FEE" | "ADMISSION_FEE" | "ONLINE_TEST_FEE";
 
-  async function handlePay() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/payments/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationId, paymentType: "APPLICATION_FEE" }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        setError(json.error?.message ?? "Failed to initialize payment.");
-        return;
-      }
-      // Redirect to Paystack payment page
-      window.location.href = json.data.authorizationUrl;
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+interface Props {
+  applicationId: string;
+  paymentType?: PaymentType;
+}
+
+export default function PayButton({ applicationId, paymentType = "APPLICATION_FEE" }: Props) {
+  if (paymentType === "ADMISSION_FEE") {
+    return (
+      <Button className="bg-[#1B4332] hover:bg-[#1B4332]/90 text-white" asChild>
+        <Link href={`/dashboard/applications/${applicationId}/admission-invoice`}>
+          <FileText className="size-4" />
+          View Acceptance Fee Invoice
+        </Link>
+      </Button>
+    );
   }
 
+  // APPLICATION_FEE and all others → existing invoice page
   return (
-    <div className="space-y-1.5">
-      {error && <p className="text-right text-sm text-red-600">{error}</p>}
-      <Button onClick={handlePay} disabled={loading} variant="outline">
-        {loading ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
-        {loading ? "Redirecting…" : "Pay Application Fee"}
-      </Button>
-    </div>
+    <Button variant="outline" asChild>
+      <Link href={`/dashboard/applications/${applicationId}/invoice`}>
+        <FileText className="size-4" />
+        View Invoice &amp; Pay
+      </Link>
+    </Button>
   );
 }

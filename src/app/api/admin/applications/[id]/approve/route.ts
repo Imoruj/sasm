@@ -25,14 +25,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json(err("VALIDATION_ERROR", "Invalid input"), { status: 400 });
     }
 
+    const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+
     const application = await db.application.findFirst({
       where: {
         id,
-        organizationId: session.user.organizationId ?? "",
-        ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        // SUPER_ADMIN can act on any application; SCHOOL_ADMIN is scoped to their org
+        ...(isSuperAdmin ? {} : { organizationId: session.user.organizationId ?? "" }),
       },
       include: {
         applicant: { select: { email: true, firstName: true } },
+        organization: { select: { name: true } },
       },
     });
 
@@ -41,6 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json(err("INVALID_STATE", "Application cannot be approved in its current state"), { status: 400 });
     }
 
+    const now = new Date();
     const [updated] = await db.$transaction([
       db.application.update({
         where: { id },
@@ -48,7 +52,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           status: "APPROVED",
           adminNotes: validated.data.adminNotes,
           reviewedBy: session.user.id,
-          reviewedAt: new Date(),
+          reviewedAt: now,
+          // Confirm payment as part of approval when evidence was uploaded
+          ...(application.paymentEvidenceUrl
+            ? {
+                paymentStatus: "PAID",
+                paymentConfirmedAt: now,
+                paymentConfirmedBy: session.user.id,
+              }
+            : {}),
         },
       }),
       db.applicationStatusHistory.create({
@@ -83,6 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       validated.data.adminNotes
         ? `Admin notes: ${validated.data.adminNotes}`
         : "Congratulations! Your application has been approved and you are now eligible for exam scheduling.",
+      application.organization?.name ?? "School",
     ).catch((e) => console.error("[EMAIL_APPROVE]", e));
 
     return NextResponse.json(ok(updated));

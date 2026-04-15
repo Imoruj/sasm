@@ -4,6 +4,15 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 
+const permissionsSchema = z.object({
+  applications: z.boolean().optional(),
+  forms:         z.boolean().optional(),
+  exams:         z.boolean().optional(),
+  communications:z.boolean().optional(),
+  reports:       z.boolean().optional(),
+  settings:      z.boolean().optional(),
+}).optional();
+
 const updateStaffSchema = z.object({
   firstName: z.string().min(1).max(100).optional(),
   lastName: z.string().min(1).max(100).optional(),
@@ -11,6 +20,7 @@ const updateStaffSchema = z.object({
   role: z.enum(["SCHOOL_ADMIN", "SUPER_ADMIN"]).optional(),
   branchId: z.string().uuid().optional().nullable(),
   isActive: z.boolean().optional(),
+  permissions: permissionsSchema,
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -107,27 +117,19 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     const [updated] = await db.$transaction([
       db.user.update({
         where: { id: staffId },
-        data: updateData,
+        data: {
+          ...updateData,
+          ...(validated.data.permissions !== undefined
+            ? { permissions: (validated.data.permissions ?? null) as never }
+            : {}),
+        },
         select: {
-          id: true,
-          email: true,
-          phone: true,
-          role: true,
-          firstName: true,
-          lastName: true,
-          avatarUrl: true,
-          emailVerified: true,
-          organizationId: true,
-          branchId: true,
-          isActive: true,
-          lastLoginAt: true,
-          createdAt: true,
-          branch: {
-            select: {
-              name: true,
-              code: true,
-            },
-          },
+          id: true, email: true, phone: true, role: true,
+          firstName: true, lastName: true, avatarUrl: true,
+          emailVerified: true, organizationId: true, branchId: true,
+          isActive: true, lastLoginAt: true, createdAt: true,
+          permissions: true,
+          branch: { select: { name: true, code: true } },
         },
       }),
       db.auditLog.create({
@@ -163,52 +165,51 @@ export async function DELETE(req: Request, { params }: RouteContext) {
 
     const { id: staffId } = await params;
 
-    // Cannot deactivate self
+    // Cannot delete self
     if (staffId === session.user.id) {
       return NextResponse.json(
-        err("FORBIDDEN", "You cannot deactivate your own account"),
+        err("FORBIDDEN", "You cannot delete your own account"),
         { status: 403 }
       );
     }
 
-    // Verify ownership
+    // Verify staff belongs to the same organization
     const staffMember = await db.user.findFirst({
       where: {
         id: staffId,
         organizationId: session.user.organizationId ?? "",
         role: { in: ["SCHOOL_ADMIN", "SUPER_ADMIN"] },
       },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true },
     });
 
     if (!staffMember) {
       return NextResponse.json(err("NOT_FOUND", "Staff member not found"), { status: 404 });
     }
 
-    await db.$transaction([
-      db.user.update({
-        where: { id: staffId },
-        data: { isActive: false },
-      }),
-      db.auditLog.create({
-        data: {
-          userId: session.user.id,
-          organizationId: session.user.organizationId,
-          action: "STAFF_DEACTIVATED",
-          entityType: "User",
-          entityId: staffId,
-          changes: {
-            before: { isActive: staffMember.isActive },
-            after: { isActive: false },
-          },
-          ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-          userAgent: req.headers.get("user-agent") ?? "",
+    // Log audit before deletion (entity won't exist after)
+    await db.auditLog.create({
+      data: {
+        userId: session.user.id,
+        organizationId: session.user.organizationId,
+        action: "STAFF_DELETED",
+        entityType: "User",
+        entityId: staffId,
+        changes: {
+          before: { email: staffMember.email, role: staffMember.role },
+          after: null,
         },
-      }),
-    ]);
+        ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+        userAgent: req.headers.get("user-agent") ?? "",
+      },
+    });
 
-    return NextResponse.json(ok({ message: "Staff member deactivated successfully" }));
+    // Hard delete the user record
+    await db.user.delete({ where: { id: staffId } });
+
+    return NextResponse.json(ok({ message: "Staff member deleted successfully" }));
   } catch (error) {
-    console.error("[DEACTIVATE_STAFF]", error);
+    console.error("[DELETE_STAFF]", error);
     return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });
   }
 }

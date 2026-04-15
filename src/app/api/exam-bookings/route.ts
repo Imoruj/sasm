@@ -4,16 +4,22 @@ import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 import { z } from "zod";
 import { customAlphabet } from "nanoid";
+import { applicantLimiter } from "@/lib/ratelimit";
 
 const nanoidQR = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 12);
 
 const bookExamSchema = z.object({
   applicationId: z.string().uuid("Invalid application ID"),
   examSessionId: z.string().uuid("Invalid exam session ID"),
+  bookedDate: z.string().optional(), // ISO date string "YYYY-MM-DD" chosen by the applicant
 });
 
 export async function GET(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await applicantLimiter.limit(ip);
+    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
@@ -34,6 +40,14 @@ export async function GET(req: Request) {
       where: {
         id: applicationId,
         applicantId: session.user.id,
+      },
+      select: {
+        id: true,
+        status: true,
+        classApplied: true,
+        organizationId: true,
+        branchId: true,
+        admissionCycleId: true,
       },
     });
     if (!application) {
@@ -76,7 +90,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { applicationId, examSessionId } = validated.data;
+    const { applicationId, examSessionId, bookedDate } = validated.data;
 
     // Verify application belongs to current user and is in APPROVED status
     const application = await db.application.findFirst({
@@ -99,13 +113,16 @@ export async function POST(req: Request) {
     const examSession = await db.examSession.findFirst({
       where: {
         id: examSessionId,
+        organizationId: application.organizationId,
+        branchId: application.branchId,
+        admissionCycleId: application.admissionCycleId,
         status: "SCHEDULED",
         classLevels: { has: application.classApplied },
       },
     });
     if (!examSession) {
       return NextResponse.json(
-        err("NOT_FOUND", "Exam session not found or not available for your class"),
+        err("NOT_FOUND", "Exam session not found or not available for your application"),
         { status: 404 }
       );
     }
@@ -141,6 +158,7 @@ export async function POST(req: Request) {
           examSessionId,
           qrCode,
           status: "BOOKED",
+          ...(bookedDate ? { bookedDate: new Date(bookedDate) } : {}),
         },
         include: {
           examSession: {

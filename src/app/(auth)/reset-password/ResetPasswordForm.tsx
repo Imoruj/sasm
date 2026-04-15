@@ -43,7 +43,7 @@ export default function ResetPasswordForm() {
 
   return (
     <AuthLayout title="Set new password" description="Enter your reset code and choose a new password">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
         {serverError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{serverError}</div>
         )}

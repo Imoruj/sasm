@@ -29,6 +29,13 @@ export async function POST(req: Request) {
 
     const existing = await db.user.findUnique({ where: { email } });
     if (existing) {
+      // If they are a staff member, tell them to log in with their staff credentials
+      if (existing.role === "SCHOOL_ADMIN" || existing.role === "SUPER_ADMIN") {
+        return NextResponse.json(
+          err("STAFF_ACCOUNT", "This email is registered as a staff account. Log in with your staff credentials to access the applicant portal."),
+          { status: 409 }
+        );
+      }
       return NextResponse.json(err("EMAIL_EXISTS", "An account with this email already exists."), { status: 409 });
     }
 
@@ -62,7 +69,8 @@ export async function POST(req: Request) {
 
     // Send verification email
     try {
-      await sendOtpEmail(email, otp, firstName);
+      const org = await db.organization.findFirst({ select: { name: true } });
+      await sendOtpEmail(email, otp, firstName, org?.name ?? "SAMS");
     } catch {
       // Don't fail registration if email fails
     }

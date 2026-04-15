@@ -105,6 +105,7 @@ export default async function StaffPage() {
           role: s.role as "SCHOOL_ADMIN" | "SUPER_ADMIN",
           lastLoginAt: s.lastLoginAt ? s.lastLoginAt.toISOString() : null,
           createdAt: s.createdAt.toISOString(),
+          permissions: {},
         }))}
         branches={branches}
         total={totalStaff}

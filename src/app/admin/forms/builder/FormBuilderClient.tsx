@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Lock, Save, CheckCircle2, LayoutTemplate } from "lucide-react";
+import { ChevronDown, ChevronRight, Lock, Save, CheckCircle2, LayoutTemplate, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   FORM_FIELD_REGISTRY,
@@ -17,34 +19,52 @@ import {
   ALL_FIELD_IDS,
   type MasterSection,
 } from "@/constants/formFieldRegistry";
+import { CLASS_LEVEL_CONFIG, CLASS_LEVELS } from "@/constants/classLevels";
+
+// Group class levels for the picker
+const CLASS_GROUPS = [
+  { label: "Early Years", keys: ["NURSERY", "PRIMARY"] },
+  { label: "Junior",      keys: ["JSS1", "JSS2", "JSS3"] },
+  { label: "Senior",      keys: ["SS1", "SS2", "SS3"] },
+] as const;
 
 interface Props {
   templateId?: string;
   initialName?: string;
   initialDescription?: string;
-  initialClassLevel?: string | null;
+  initialClassLevels?: string[];
   initialStatus?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   initialEnabledFields?: string[];
 }
 
 export default function FormBuilderClient({
   templateId,
-  initialName        = "Standard Admission Form",
-  initialDescription = "",
-  initialClassLevel  = null,
-  initialStatus      = "DRAFT",
+  initialName         = "Standard Admission Form",
+  initialDescription  = "",
+  initialClassLevels  = [],
+  initialStatus       = "DRAFT",
   initialEnabledFields,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // ── State ────────────────────────────────────────────────────────────────────
-  const [name,        setName]        = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-  const [classLevel,  setClassLevel]  = useState<string>(initialClassLevel ?? "ALL");
-  const [status,      setStatus]      = useState<"DRAFT" | "PUBLISHED">(
+  const [name,         setName]        = useState(initialName);
+  const [description,  setDescription] = useState(initialDescription);
+  const [classLevels,  setClassLevels] = useState<string[]>(initialClassLevels);
+  const [status,       setStatus]      = useState<"DRAFT" | "PUBLISHED">(
     initialStatus === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
   );
+
+  const toggleClass = (key: string) => {
+    setSaved(false);
+    setClassLevels((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const selectAllClasses = () => { setSaved(false); setClassLevels(CLASS_LEVELS as unknown as string[]); };
+  const clearAllClasses  = () => { setSaved(false); setClassLevels([]); };
   const [enabled, setEnabled] = useState<Set<string>>(
     new Set(initialEnabledFields ?? ALL_FIELD_IDS),
   );
@@ -86,7 +106,7 @@ export default function FormBuilderClient({
       const body = {
         name,
         description,
-        classLevel: classLevel === "ALL" ? null : classLevel,
+        classLevels,
         status,
         enabledFields: [...enabled],
       };
@@ -136,22 +156,105 @@ export default function FormBuilderClient({
                 placeholder="e.g. JSS 1 Admission Form"
               />
             </div>
+            {/* ── Multi-select class level picker ── */}
             <div>
-              <Label className="mb-1.5 block text-xs font-medium text-gray-700">Class Level</Label>
-              <Select value={classLevel ?? "ALL"} onValueChange={(v) => { setClassLevel(v ?? "ALL"); setSaved(false); }}>
-                <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Classes</SelectItem>
-                  <SelectItem value="NURSERY">Nursery</SelectItem>
-                  <SelectItem value="PRIMARY">Primary</SelectItem>
-                  <SelectItem value="JSS1">JSS 1</SelectItem>
-                  <SelectItem value="JSS2">JSS 2</SelectItem>
-                  <SelectItem value="JSS3">JSS 3</SelectItem>
-                  <SelectItem value="SS1">SS 1</SelectItem>
-                  <SelectItem value="SS2">SS 2</SelectItem>
-                  <SelectItem value="SS3">SS 3</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="mb-1.5 block text-xs font-medium text-gray-700">
+                Class Levels
+                <span className="ml-1 text-gray-400 font-normal">(select all that apply)</span>
+              </Label>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex min-h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-xs ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    />
+                  }
+                >
+                  <span className="flex flex-wrap gap-1 flex-1 min-w-0">
+                    {classLevels.length === 0 ? (
+                      <span className="text-muted-foreground">All Classes (no restriction)</span>
+                    ) : classLevels.length === CLASS_LEVELS.length ? (
+                      <span className="inline-flex items-center rounded-full bg-[#1B4332]/10 text-[#1B4332] px-2 py-0.5 text-xs font-medium">
+                        All Classes
+                      </span>
+                    ) : (
+                      classLevels.map((key) => (
+                        <span
+                          key={key}
+                          className="inline-flex items-center gap-1 rounded-full bg-[#1B4332]/10 text-[#1B4332] pl-2 pr-1 py-0.5 text-xs font-medium"
+                        >
+                          {CLASS_LEVEL_CONFIG[key as keyof typeof CLASS_LEVEL_CONFIG]?.label ?? key}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); toggleClass(key); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); toggleClass(key); } }}
+                            className="rounded-full hover:bg-[#1B4332]/20 p-0.5 cursor-pointer"
+                            aria-label={`Remove ${CLASS_LEVEL_CONFIG[key as keyof typeof CLASS_LEVEL_CONFIG]?.label ?? key}`}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </span>
+                        </span>
+                      ))
+                    )}
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground ml-1" />
+                </PopoverTrigger>
+
+                <PopoverContent align="start" className="w-72 p-0">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b px-3 py-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {classLevels.length === 0 ? "No restriction" : `${classLevels.length} selected`}
+                    </span>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={selectAllClasses} className="text-xs text-[#1B4332] hover:underline font-medium">
+                        Select all
+                      </button>
+                      <span className="text-muted-foreground">·</span>
+                      <button type="button" onClick={clearAllClasses} className="text-xs text-muted-foreground hover:underline">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Groups */}
+                  <div className="p-2 space-y-3">
+                    {CLASS_GROUPS.map((group) => (
+                      <div key={group.label}>
+                        <p className="px-1 mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {group.label}
+                        </p>
+                        <div className="grid grid-cols-3 gap-1">
+                          {group.keys.map((key) => {
+                            const label = CLASS_LEVEL_CONFIG[key as keyof typeof CLASS_LEVEL_CONFIG]?.label ?? key;
+                            const checked = classLevels.includes(key);
+                            return (
+                              <label
+                                key={key}
+                                className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                                  checked ? "bg-[#1B4332]/10 text-[#1B4332] font-medium" : "hover:bg-muted"
+                                }`}
+                              >
+                                <Checkbox checked={checked} onCheckedChange={() => toggleClass(key)} />
+                                {label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="border-t px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Leave empty to allow all classes. Selected classes restrict which applicants see this form.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label className="mb-1.5 block text-xs font-medium text-gray-700">Status</Label>

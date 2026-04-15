@@ -4,6 +4,7 @@ import { useState } from "react";
 import AppSidebar from "./AppSidebar";
 import Header from "./Header";
 import type { UserRole } from "@prisma/client";
+import type { StaffPermissions } from "@/lib/staffAccess";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,8 @@ interface DashboardLayoutProps {
   orgName?: string;
   orgLogo?: string | null;
   unreadCount?: number;
+  permissions?: StaffPermissions | null;
+  branchName?: string | null;
 }
 
 export default function DashboardLayout({
@@ -25,6 +28,8 @@ export default function DashboardLayout({
   orgName,
   orgLogo,
   unreadCount = 0,
+  permissions,
+  branchName,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -44,7 +49,7 @@ export default function DashboardLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <AppSidebar role={role} orgName={orgName} orgLogo={orgLogo} />
+        <AppSidebar role={role} orgName={orgName} orgLogo={orgLogo} permissions={permissions} branchName={branchName} />
       </div>
 
       {/* Main content */}

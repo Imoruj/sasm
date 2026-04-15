@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthLayout title="Forgot password" description="Enter your email to receive a reset code">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email address</Label>
           <Input id="email" type="email" placeholder="you@example.com" {...register("email")} />

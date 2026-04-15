@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
+import { applicantLimiter } from "@/lib/ratelimit";
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1).max(100).optional(),
@@ -25,8 +26,12 @@ const updateProfileSchema = z.object({
   emergencyContactRelation: z.string().max(50).optional(),
 });
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await applicantLimiter.limit(ip);
+    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
@@ -68,6 +73,10 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await applicantLimiter.limit(ip);
+    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
+
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
@@ -180,7 +189,6 @@ export async function PATCH(req: Request) {
     }
 
     // Write audit log
-    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
     await db.auditLog.create({
       data: {
         userId: session.user.id,
@@ -205,31 +213,7 @@ export async function PATCH(req: Request) {
       },
     });
 
-    // Re-fetch with profile
-    const finalUser = await db.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        phone: true,
-        role: true,
-        firstName: true,
-        lastName: true,
-        avatarUrl: true,
-        emailVerified: true,
-        phoneVerified: true,
-        twoFactorEnabled: true,
-        organizationId: true,
-        branchId: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        applicantProfile: true,
-      },
-    });
-
-    return NextResponse.json(ok({ user: finalUser }));
+    return NextResponse.json(ok({ user: updatedUser }));
   } catch (error) {
     console.error("[PATCH_PROFILE]", error);
     return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });

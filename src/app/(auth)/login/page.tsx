@@ -43,7 +43,7 @@ export default function LoginPage() {
 
   return (
     <AuthLayout title="Welcome back" description="Sign in to your SAMS account">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
         {serverError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{serverError}</div>
         )}

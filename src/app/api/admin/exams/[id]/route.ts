@@ -69,7 +69,17 @@ export async function PATCH(
 
     // Build update data
     const updateData: Record<string, unknown> = { ...rest };
-    if (examDate) updateData.examDate = new Date(examDate);
+
+    // Handle examDates (multi-date)
+    if (Array.isArray(body.examDates) && body.examDates.length > 0) {
+      const dates: Date[] = (body.examDates as string[]).map((d) => new Date(d));
+      updateData.examDates = dates;
+      // Keep examDate in sync as the earliest date
+      updateData.examDate = dates.slice().sort((a, b) => a.getTime() - b.getTime())[0];
+    } else if (examDate) {
+      updateData.examDate = new Date(examDate);
+    }
+
     if (mode !== undefined) {
       updateData.mode = mode;
       updateData.venue = mode === "ON_CAMPUS" ? (venue ?? existing.venue) : null;

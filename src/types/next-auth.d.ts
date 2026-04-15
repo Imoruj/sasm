@@ -1,4 +1,5 @@
 import type { UserRole } from "@prisma/client";
+import type { StaffPermissions } from "@/lib/staffAccess";
 
 declare module "next-auth" {
   interface Session {
@@ -6,10 +7,13 @@ declare module "next-auth" {
       id: string;
       email: string;
       name: string;
+      image?: string | null;
       role: UserRole;
       organizationId: string | null;
       branchId: string | null;
-      image?: string | null;
+      permissions: StaffPermissions;
+      isActive: boolean;
+      updatedAt: string;
     };
   }
 
@@ -26,5 +30,11 @@ declare module "next-auth/jwt" {
     role: UserRole;
     organizationId: string | null;
     branchId: string | null;
+    name?: string | null;
+    email?: string | null;
+    picture?: string | null;
+    permissions?: StaffPermissions;
+    isActive?: boolean;
+    updatedAt?: string;
   }
 }

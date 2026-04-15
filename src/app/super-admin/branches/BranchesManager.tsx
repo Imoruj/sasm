@@ -10,6 +10,7 @@ import {
   Plus,
   Pencil,
   PowerOff,
+  Trash2,
   MapPin,
   Users,
   FileText,
@@ -303,6 +304,7 @@ export default function BranchesManager({ initialBranches }: BranchesManagerProp
   const [createOpen, setCreateOpen] = useState(false);
   const [editBranch, setEditBranch] = useState<BranchWithCounts | null>(null);
   const [deactivateBranch, setDeactivateBranch] = useState<BranchWithCounts | null>(null);
+  const [deleteBranch, setDeleteBranch] = useState<BranchWithCounts | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createForm = useForm<BranchFormValues>({
@@ -405,6 +407,30 @@ export default function BranchesManager({ initialBranches }: BranchesManagerProp
           b.id === deactivateBranch.id ? { ...b, isActive: false } : b
         )
       );
+    } catch {
+      toast.error("An unexpected error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteBranch) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/super-admin/branches/${deleteBranch.id}?permanent=true`,
+        { method: "DELETE" }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error?.message ?? "Failed to delete branch.");
+        return;
+      }
+      toast.success(`Branch "${deleteBranch.name}" has been permanently deleted.`);
+      setDeleteBranch(null);
+      router.refresh();
+      setBranches((prev) => prev.filter((b) => b.id !== deleteBranch.id));
     } catch {
       toast.error("An unexpected error occurred.");
     } finally {
@@ -607,6 +633,41 @@ export default function BranchesManager({ initialBranches }: BranchesManagerProp
                             </AlertDialogContent>
                           </AlertDialog>
                         )}
+
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            render={<Button variant="ghost" size="icon-sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" title="Delete branch" onClick={() => setDeleteBranch(branch)} />}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Branch Permanently</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will <strong>permanently delete</strong>{" "}
+                                <strong>{branch.name}</strong> and all associated data.
+                                This action <strong>cannot be undone</strong>.
+                                {branch._count.applications > 0 && (
+                                  <span className="mt-2 block rounded-md bg-red-50 p-2 text-red-700 text-xs font-medium">
+                                    This branch has {branch._count.applications} application(s). Deletion will be blocked — deactivate it instead.
+                                  </span>
+                                )}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel onClick={() => setDeleteBranch(null)}>
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={handleDelete}
+                                disabled={isSubmitting}
+                              >
+                                {isSubmitting ? "Deleting..." : "Delete Permanently"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </td>
                   </tr>

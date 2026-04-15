@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Building2, Banknote, User, Loader2, Save, ImageIcon } from "lucide-react";
+import { Building2, Banknote, User, Loader2, Save, ImageIcon, Pencil, Trash2, Plus, X } from "lucide-react";
 import AvatarUpload from "@/components/shared/AvatarUpload";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,9 +76,10 @@ type OrgFormValues = z.infer<typeof orgSchema>;
 // ─── Fee helpers ─────────────────────────────────────────────────────────────
 
 const FEE_TYPES = [
-  { key: "APPLICATION_FEE", label: "Application Fee" },
-  { key: "EXAM_FEE",        label: "Exam Fee" },
-  { key: "ADMISSION_FEE",   label: "Admission Fee" },
+  { key: "APPLICATION_FEE",  label: "Application Fee" },
+  { key: "ONLINE_TEST_FEE",  label: "Online Placement Test Fee (surcharge)" },
+  { key: "EXAM_FEE",         label: "Exam Fee" },
+  { key: "ADMISSION_FEE",    label: "Admission Acceptance Fee" },
 ] as const;
 
 function koboToNaira(kobo: number) {
@@ -324,46 +325,77 @@ function SchoolInfoTab({ org }: { org: OrgData }) {
 
 // ─── Fee Structure Tab ────────────────────────────────────────────────────────
 
-function FeeStructureTab({ cycles, fees }: { cycles: Cycle[]; fees: FeeRecord[] }) {
+function FeeStructureTab({ cycles, fees: initialFees }: { cycles: Cycle[]; fees: FeeRecord[] }) {
   const [selectedCycleId, setSelectedCycleId] = useState<string>(cycles[0]?.id ?? "");
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [isPending, startTransition] = useTransition();
+  const [localFees, setLocalFees] = useState<FeeRecord[]>(initialFees);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [addValue, setAddValue] = useState<string>("0.00");
+  const [saving, setSaving] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  // Populate amounts when cycle changes
-  useEffect(() => {
-    const cycleId = selectedCycleId;
-    const init: Record<string, string> = {};
-    for (const ft of FEE_TYPES) {
-      const record = fees.find((f) => f.admissionCycleId === cycleId && f.paymentType === ft.key);
-      init[ft.key] = record ? koboToNaira(record.amountKobo) : "0.00";
+  // Keep local fees in sync if parent re-renders (e.g. router.refresh)
+  useEffect(() => { setLocalFees(initialFees); }, [initialFees]);
+
+  const cycleFees = localFees.filter((f) => f.admissionCycleId === selectedCycleId);
+
+  async function handleSaveFee(key: string, feeId: string) {
+    setSaving(key);
+    try {
+      const amountKobo = nairaToKobo(editValue);
+      const res = await fetch(`/api/admin/settings/fees/${feeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountKobo }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error?.message ?? "Failed to save"); return; }
+      setLocalFees((prev) => prev.map((f) => f.id === feeId ? { ...f, amountKobo } : f));
+      setEditingKey(null);
+      toast.success("Fee updated");
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setSaving(null);
     }
-    setAmounts(init);
-  }, [selectedCycleId, fees]);
+  }
 
-  function handleSave() {
-    startTransition(async () => {
-      try {
-        const feesPayload = FEE_TYPES.map(({ key }) => ({
-          paymentType: key,
-          amountKobo:  nairaToKobo(amounts[key] ?? "0"),
-        }));
+  async function handleDeleteFee(feeId: string) {
+    setDeleting(feeId);
+    try {
+      const res = await fetch(`/api/admin/settings/fees/${feeId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error?.message ?? "Failed to remove fee"); return; }
+      setLocalFees((prev) => prev.filter((f) => f.id !== feeId));
+      toast.success("Fee removed");
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
-        const res = await fetch("/api/admin/settings/fees", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ admissionCycleId: selectedCycleId, fees: feesPayload }),
-        });
-
-        const json = await res.json();
-        if (!res.ok) {
-          toast.error(json.error?.message ?? "Failed to save fees");
-          return;
-        }
-        toast.success("Fee structure saved");
-      } catch {
-        toast.error("Something went wrong. Please try again.");
-      }
-    });
+  async function handleAddFee(key: string) {
+    setSaving(key);
+    try {
+      const amountKobo = nairaToKobo(addValue);
+      const res = await fetch("/api/admin/settings/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admissionCycleId: selectedCycleId, paymentType: key, amountKobo }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error?.message ?? "Failed to add fee"); return; }
+      setLocalFees((prev) => [...prev, json.data as FeeRecord]);
+      setAddingKey(null);
+      setAddValue("0.00");
+      toast.success("Fee added");
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setSaving(null);
+    }
   }
 
   if (cycles.length === 0) {
@@ -379,61 +411,165 @@ function FeeStructureTab({ cycles, fees }: { cycles: Cycle[]; fees: FeeRecord[] 
   return (
     <Card>
       <CardContent className="py-6 space-y-6">
+        {/* Admission Cycle — native select to render name, not UUID */}
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-1">Admission Cycle</h3>
           <p className="text-sm text-gray-500 mb-3">Select a cycle to view or update its fee structure.</p>
-          <Select value={selectedCycleId} onValueChange={(v) => setSelectedCycleId(v ?? "")}>
-            <SelectTrigger className="max-w-sm">
-              <SelectValue placeholder="Select cycle" />
-            </SelectTrigger>
-            <SelectContent>
-              {cycles.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name} — {c.academicYear}
-                  <span className="ml-2 text-xs text-gray-400">({c.status})</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={selectedCycleId}
+            onChange={(e) => {
+              setSelectedCycleId(e.target.value);
+              setEditingKey(null);
+              setAddingKey(null);
+            }}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1B4332]/30 max-w-sm w-full"
+          >
+            {cycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} — {c.academicYear} ({c.status})
+              </option>
+            ))}
+          </select>
         </div>
 
         <Separator />
 
+        {/* Per-fee CRUD rows */}
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-1">Fee Amounts</h3>
-          <p className="text-sm text-gray-500 mb-4">Enter amounts in Naira (₦). Set to 0 to waive a fee.</p>
-          <div className="space-y-4">
-            {FEE_TYPES.map(({ key, label }) => (
-              <div key={key} className="space-y-2">
-                <Label htmlFor={key}>{label}</Label>
-                <div className="relative max-w-xs">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-medium select-none">₦</span>
-                  <Input
-                    id={key}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="pl-7"
-                    value={amounts[key] ?? "0.00"}
-                    onChange={(e) => setAmounts((prev) => ({ ...prev, [key]: e.target.value }))}
-                  />
-                </div>
-                <p className="text-xs text-gray-400">
-                  Stored as {nairaToKobo(amounts[key] ?? "0").toLocaleString()} kobo
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Amounts in Naira (₦). The Admission Acceptance Fee is charged when a parent accepts an offer.
+          </p>
+          <div className="space-y-3">
+            {FEE_TYPES.map(({ key, label }) => {
+              const record    = cycleFees.find((f) => f.paymentType === key);
+              const isEditing = editingKey === key;
+              const isAdding  = addingKey  === key;
+              const isSaving  = saving     === key;
+              const isDeleting = record ? deleting === record.id : false;
 
-        <div className="flex justify-end pt-2">
-          <Button onClick={handleSave} disabled={isPending || !selectedCycleId} className="min-w-[140px]">
-            {isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
-            ) : (
-              <><Save className="h-4 w-4" /> Save Fees</>
-            )}
-          </Button>
+              return (
+                <div
+                  key={key}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                >
+                  {/* Left: label + inline edit/add form */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{label}</p>
+
+                    {/* Existing record — show amount */}
+                    {record && !isEditing && (
+                      <p className="mt-0.5 text-sm font-semibold text-green-700">
+                        ₦{koboToNaira(record.amountKobo)}
+                        <span className="ml-1.5 text-xs font-normal text-gray-400">
+                          ({record.amountKobo.toLocaleString()} kobo)
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Inline edit form */}
+                    {record && isEditing && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500 select-none font-medium">₦</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSaveFee(key, record.id); if (e.key === "Escape") setEditingKey(null); }}
+                            className="h-8 w-36 rounded-md border border-gray-300 pl-7 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]/30"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleSaveFee(key, record.id)}
+                          disabled={isSaving}
+                          className="inline-flex items-center gap-1 rounded-md bg-[#1B4332] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                        >
+                          {isSaving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+                          {isSaving ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          onClick={() => setEditingKey(null)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          <X className="size-3" /> Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Not set — show add form */}
+                    {!record && !isAdding && (
+                      <p className="mt-0.5 text-xs text-gray-400 italic">Not set for this cycle</p>
+                    )}
+                    {!record && isAdding && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500 select-none font-medium">₦</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            autoFocus
+                            value={addValue}
+                            onChange={(e) => setAddValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddFee(key); if (e.key === "Escape") setAddingKey(null); }}
+                            className="h-8 w-36 rounded-md border border-gray-300 pl-7 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4332]/30"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleAddFee(key)}
+                          disabled={isSaving}
+                          className="inline-flex items-center gap-1 rounded-md bg-[#1B4332] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+                        >
+                          {isSaving ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                          {isSaving ? "Adding…" : "Add"}
+                        </button>
+                        <button
+                          onClick={() => setAddingKey(null)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          <X className="size-3" /> Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: action buttons */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {record && !isEditing && (
+                      <>
+                        <button
+                          onClick={() => { setEditingKey(key); setEditValue(koboToNaira(record.amountKobo)); }}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                          <Pencil className="size-3" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFee(record.id)}
+                          disabled={isDeleting}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-100 bg-white px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-60"
+                        >
+                          {isDeleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+                          {isDeleting ? "…" : "Delete"}
+                        </button>
+                      </>
+                    )}
+                    {!record && !isAdding && (
+                      <button
+                        onClick={() => { setAddingKey(key); setAddValue("0.00"); }}
+                        className="inline-flex items-center gap-1 rounded-md border border-[#1B4332]/20 bg-white px-2.5 py-1.5 text-xs font-medium text-[#1B4332] hover:bg-[#1B4332]/5 transition-colors"
+                      >
+                        <Plus className="size-3" /> Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -18,14 +18,23 @@ import {
   MessageSquare,
   TrendingUp,
   Layers,
+  Trophy,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
+import {
+  canAccessStaffFeature,
+  hasExplicitStaffPermissions,
+  type PermissionKey,
+  type StaffPermissions,
+} from "@/lib/staffAccess";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+  feature?: PermissionKey | null;
 }
 
 const APPLICANT_NAV: NavItem[] = [
@@ -39,38 +48,50 @@ const APPLICANT_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard",      href: "/admin",                icon: LayoutDashboard },
-  { label: "Applications",   href: "/admin/applications",   icon: ClipboardList },
-  { label: "Form Builder",   href: "/admin/forms",          icon: Layers },
-  { label: "Exams",          href: "/admin/exams",          icon: Calendar },
-  { label: "Communications", href: "/admin/communications", icon: MessageSquare },
-  { label: "Reports",        href: "/admin/reports",        icon: BarChart3 },
-  { label: "Settings",       href: "/admin/settings",       icon: Settings },
+  { label: "Applications",   href: "/admin/applications",   icon: ClipboardList, feature: "applications" },
+  { label: "Form Builder",   href: "/admin/forms",          icon: Layers, feature: "forms" },
+  { label: "Exams",          href: "/admin/exams",          icon: Calendar, feature: "exams" },
+  { label: "Results",        href: "/admin/results",        icon: Trophy, feature: "exams" },
+  { label: "Admissions",     href: "/admin/admissions",     icon: UserCheck, feature: "applications" },
+  { label: "Communications", href: "/admin/communications", icon: MessageSquare, feature: "communications" },
+  { label: "Reports",        href: "/admin/reports",        icon: BarChart3, feature: "reports" },
+  { label: "Settings",       href: "/admin/settings",       icon: Settings, feature: "settings" },
 ];
 
 const SUPER_ADMIN_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
-  { label: "Branches", href: "/super-admin/branches", icon: Building2 },
-  { label: "Staff", href: "/super-admin/staff", icon: Users },
-  { label: "Admission Cycles", href: "/super-admin/cycles", icon: BookOpen },
-  { label: "Analytics", href: "/super-admin/analytics", icon: TrendingUp },
-  { label: "Organisation", href: "/super-admin/organizations", icon: Settings },
+  { label: "Dashboard",       href: "/super-admin",                   icon: LayoutDashboard },
+  { label: "Branches",        href: "/super-admin/branches",          icon: Building2 },
+  { label: "Staff",           href: "/super-admin/staff",             icon: Users },
+  { label: "Applications",    href: "/super-admin/applications",      icon: ClipboardList },
+  { label: "Form Templates",  href: "/super-admin/forms",             icon: Layers },
+  { label: "Admission Cycles",href: "/super-admin/cycles",            icon: BookOpen },
+  { label: "Analytics",       href: "/super-admin/analytics",         icon: TrendingUp },
+  { label: "Organisation",    href: "/super-admin/organizations",     icon: Settings },
+  { label: "App Settings",    href: "/super-admin/settings",          icon: MessageSquare },
 ];
 
-function getNavItems(role: UserRole): NavItem[] {
+function getNavItems(role: UserRole, permissions?: StaffPermissions | null): NavItem[] {
   if (role === "SUPER_ADMIN") return SUPER_ADMIN_NAV;
-  if (role === "SCHOOL_ADMIN") return ADMIN_NAV;
+  if (role === "SCHOOL_ADMIN") {
+    return ADMIN_NAV.filter((item) => {
+      if (!item.feature) return true; // Dashboard, profile — always visible
+      return canAccessStaffFeature(role, permissions, item.feature);
+    });
+  }
   return APPLICANT_NAV;
 }
 
 interface AppSidebarProps {
   role: UserRole;
+  permissions?: StaffPermissions | null;
   orgName?: string;
   orgLogo?: string | null;
+  branchName?: string | null;
 }
 
-export default function AppSidebar({ role, orgName, orgLogo }: AppSidebarProps) {
+export default function AppSidebar({ role, permissions, orgName, orgLogo, branchName }: AppSidebarProps) {
   const pathname = usePathname();
-  const navItems = getNavItems(role);
+  const navItems = getNavItems(role, permissions);
 
   return (
     <aside className="flex h-full w-[280px] flex-col border-r border-gray-200 bg-white">
@@ -85,11 +106,15 @@ export default function AppSidebar({ role, orgName, orgLogo }: AppSidebarProps) 
           </div>
         )}
         <div className="min-w-0">
-          <p className="text-sm font-semibold leading-5 text-gray-900 break-words whitespace-normal">
+          <p className="text-sm font-semibold leading-5 text-gray-900 wrap-break-word whitespace-normal">
             {orgName ?? "SAMS"}
           </p>
           <p className="text-xs text-gray-500 capitalize leading-4">
-            {role === "SUPER_ADMIN" ? "Super Admin" : role === "SCHOOL_ADMIN" ? "Admin" : "Applicant Portal"}
+            {role === "SUPER_ADMIN"
+              ? "Super Admin"
+              : role === "SCHOOL_ADMIN"
+              ? branchName ?? "Admin"
+              : "Applicant Portal"}
           </p>
         </div>
       </div>

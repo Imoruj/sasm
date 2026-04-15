@@ -67,7 +67,7 @@ const formSchema = z.object({
   admissionCycleId: z.string().uuid("Please select an admission cycle"),
   title: z.string().min(3).max(255),
   description: z.string().optional(),
-  examDate: z.string().min(1, "Exam date is required"),
+  examDates: z.array(z.string().min(1)).min(1, "At least one exam date is required"),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Time must be in HH:MM format"),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, "Time must be in HH:MM format"),
   durationMinutes: z.coerce.number().int().min(30).max(480),
@@ -105,10 +105,13 @@ export default function ExamSessionsManager({
 }: Props) {
   const router = useRouter();
   const [sessions, setSessions] = useState<ExamSessionWithCounts[]>(initialSessions);
-  const [filterCycleId, setFilterCycleId] = useState<string>("all");
+  const [filterCycleId, setFilterCycleId] = useState<string>(
+    admissionCycles[0]?.id ?? "all",
+  );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<ExamSessionWithCounts | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newDateInput, setNewDateInput] = useState("");
 
   const filteredSessions =
     filterCycleId === "all"
@@ -121,7 +124,7 @@ export default function ExamSessionsManager({
       admissionCycleId: admissionCycles[0]?.id ?? "",
       title: "",
       description: "",
-      examDate: "",
+      examDates: [],
       startTime: "09:00",
       endTime: "11:00",
       durationMinutes: 120,
@@ -135,13 +138,14 @@ export default function ExamSessionsManager({
 
   const watchedMode = form.watch("mode");
   const watchedClassLevels = form.watch("classLevels");
+  const watchedExamDates = form.watch("examDates");
 
   function openCreateDialog() {
     form.reset({
       admissionCycleId: admissionCycles[0]?.id ?? "",
       title: "",
       description: "",
-      examDate: "",
+      examDates: [],
       startTime: "09:00",
       endTime: "11:00",
       durationMinutes: 120,
@@ -151,17 +155,21 @@ export default function ExamSessionsManager({
       capacity: 50,
       classLevels: [],
     });
+    setNewDateInput("");
     setEditingSession(null);
     setIsCreateOpen(true);
   }
 
   function openEditDialog(session: ExamSessionWithCounts) {
-    const examDateStr = new Date(session.examDate).toISOString().split("T")[0];
+    // Populate examDates from the session's examDates array, fall back to examDate
+    const dates = session.examDates.length > 0
+      ? session.examDates.map((d) => new Date(d).toISOString().split("T")[0])
+      : [new Date(session.examDate).toISOString().split("T")[0]];
     form.reset({
       admissionCycleId: session.admissionCycleId,
       title: session.title,
       description: session.description ?? "",
-      examDate: examDateStr,
+      examDates: dates,
       startTime: session.startTime,
       endTime: session.endTime,
       durationMinutes: session.durationMinutes,
@@ -171,25 +179,43 @@ export default function ExamSessionsManager({
       capacity: session.capacity,
       classLevels: session.classLevels as FormValues["classLevels"],
     });
+    setNewDateInput("");
     setEditingSession(session);
     setIsCreateOpen(true);
+  }
+
+  function addDate() {
+    if (!newDateInput) return;
+    const current = watchedExamDates as string[];
+    if (current.includes(newDateInput)) return;
+    const sorted = [...current, newDateInput].sort();
+    form.setValue("examDates", sorted);
+    setNewDateInput("");
+  }
+
+  function removeDate(date: string) {
+    form.setValue("examDates", (watchedExamDates as string[]).filter((d) => d !== date));
   }
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
     try {
+      // examDate (primary) = first sorted date for backwards compatibility
+      const examDate = (values.examDates as string[]).sort()[0];
+      const payload = { ...values, examDate };
+
       let res: Response;
       if (editingSession) {
         res = await fetch(`/api/admin/exams/${editingSession.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         });
       } else {
         res = await fetch("/api/admin/exams", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...values, ...(branchId ? { branchId } : {}) }),
+          body: JSON.stringify({ ...payload, ...(branchId ? { branchId } : {}) }),
         });
       }
 
@@ -258,14 +284,20 @@ export default function ExamSessionsManager({
         <div className="flex items-center gap-2">
           <Label className="text-sm text-gray-600 whitespace-nowrap">Filter by cycle:</Label>
           <Select value={filterCycleId} onValueChange={(v) => setFilterCycleId(v ?? "all")}>
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="All cycles" />
+            <SelectTrigger className="w-64">
+              <span className="flex-1 text-left text-sm truncate">
+                {filterCycleId === "all"
+                  ? "All cycles"
+                  : admissionCycles.find((c) => c.id === filterCycleId)
+                    ? `${admissionCycles.find((c) => c.id === filterCycleId)!.name} (${admissionCycles.find((c) => c.id === filterCycleId)!.academicYear})`
+                    : "All cycles"}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All cycles</SelectItem>
               {admissionCycles.map((cycle) => (
                 <SelectItem key={cycle.id} value={cycle.id}>
-                  {cycle.name}
+                  {cycle.name} ({cycle.academicYear})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -297,7 +329,16 @@ export default function ExamSessionsManager({
                   onValueChange={(v) => form.setValue("admissionCycleId", v ?? "")}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select cycle" />
+                    <SelectValue>
+                      {(() => {
+                        const selected = admissionCycles.find(
+                          (c) => c.id === form.watch("admissionCycleId"),
+                        );
+                        return selected
+                          ? `${selected.name} (${selected.academicYear})`
+                          : <span className="text-muted-foreground">Select cycle</span>;
+                      })()}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {admissionCycles.map((c) => (
@@ -334,15 +375,67 @@ export default function ExamSessionsManager({
                 />
               </div>
 
-              {/* Date + Times */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Exam Date <span className="text-red-500">*</span></Label>
-                  <Input type="date" {...form.register("examDate")} />
-                  {form.formState.errors.examDate && (
-                    <p className="text-xs text-red-500">{form.formState.errors.examDate.message}</p>
-                  )}
+              {/* Exam Dates — multi-date picker */}
+              <div className="space-y-1.5">
+                <Label>
+                  Exam Dates <span className="text-red-500">*</span>
+                  <span className="ml-1 text-xs font-normal text-gray-400">(add one or more dates — parents choose)</span>
+                </Label>
+
+                {/* Existing dates list */}
+                {(watchedExamDates as string[]).length > 0 && (
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
+                    {(watchedExamDates as string[]).map((d) => (
+                      <span
+                        key={d}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[#1B4332]/20 bg-white px-2.5 py-1 text-xs font-medium text-[#1B4332]"
+                      >
+                        <Calendar className="h-3 w-3" />
+                        {new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        <button
+                          type="button"
+                          onClick={() => removeDate(d)}
+                          className="ml-0.5 text-gray-400 hover:text-red-500"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add date input */}
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={newDateInput}
+                    onChange={(e) => setNewDateInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDate(); } }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addDate}
+                    disabled={!newDateInput}
+                    className="shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
                 </div>
+
+                {form.formState.errors.examDates && (
+                  <p className="text-xs text-red-500">
+                    {typeof form.formState.errors.examDates?.message === "string"
+                      ? form.formState.errors.examDates.message
+                      : "At least one date is required"}
+                  </p>
+                )}
+              </div>
+
+              {/* Times */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Start Time <span className="text-red-500">*</span></Label>
                   <Input type="time" {...form.register("startTime")} />
@@ -534,10 +627,26 @@ export default function ExamSessionsManager({
                 <CardContent className="space-y-3 pt-0">
                   {/* Date & Time */}
                   <div className="flex flex-col gap-1 text-xs text-gray-600">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                      {formatDate(session.examDate)}
-                    </span>
+                    {session.examDates.length > 1 ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1 text-gray-400 font-medium">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {session.examDates.length} dates available
+                        </span>
+                        <div className="flex flex-wrap gap-1 pl-5">
+                          {session.examDates.slice().sort().map((d) => (
+                            <span key={String(d)} className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px]">
+                              {formatDate(d)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                        {formatDate(session.examDate)}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5 text-gray-400" />
                       {session.startTime} – {session.endTime}

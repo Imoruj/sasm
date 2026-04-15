@@ -50,7 +50,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ApplicantLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== "APPLICANT") redirect("/admin");
+  // Staff members may access sub-pages of the applicant portal (e.g. /dashboard/applications)
+  // but hitting the root /dashboard itself redirects them to their own portal (handled in proxy).
+  // Block any truly unknown roles.
+  if (!["APPLICANT", "SCHOOL_ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
+    redirect("/login");
+  }
 
   const [unreadCount, user, directOrg, recentApplication] = await Promise.all([
     db.notification.count({
