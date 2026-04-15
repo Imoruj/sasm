@@ -1,6 +1,14 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy client — avoids "Missing API key" crash during Next.js build-time
+// page-data collection when RESEND_API_KEY is not set in the build env.
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
+// Keep a top-level alias so all call sites below stay unchanged.
+const resend = { emails: { send: (...args: Parameters<Resend["emails"]["send"]>) => getResend().emails.send(...args) } };
 
 // Support both EMAIL_FROM ("Name <addr@domain.com>") and EMAIL_FROM_ADDRESS ("addr@domain.com")
 function parseEmailAddress(raw: string | undefined): string {
