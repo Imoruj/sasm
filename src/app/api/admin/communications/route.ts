@@ -4,9 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 import { adminLimiter } from "@/lib/ratelimit";
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { resend } from "@/lib/email";
 
 const sendSchema = z.object({
   subject: z.string().min(3, "Subject is required").max(255),

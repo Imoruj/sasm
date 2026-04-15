@@ -7,8 +7,8 @@ function getResend(): Resend {
   if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
   return _resend;
 }
-// Keep a top-level alias so all call sites below stay unchanged.
-const resend = { emails: { send: (...args: Parameters<Resend["emails"]["send"]>) => getResend().emails.send(...args) } };
+// Keep a top-level alias so all call sites stay unchanged (also exported for route files).
+export const resend = { emails: { send: (...args: Parameters<Resend["emails"]["send"]>) => getResend().emails.send(...args) } };
 
 // Support both EMAIL_FROM ("Name <addr@domain.com>") and EMAIL_FROM_ADDRESS ("addr@domain.com")
 function parseEmailAddress(raw: string | undefined): string {
