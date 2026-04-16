@@ -62,9 +62,22 @@ const securityHeaders = [
   },
 ];
 
+const CANONICAL_DOMAIN = "www.admission.trinitateschools.com";
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
+  },
+  async redirects() {
+    return [
+      {
+        // Redirect the stable Vercel project subdomain to the canonical domain
+        source: "/:path*",
+        has: [{ type: "host", value: "sams-josephs-projects-d429a6bf.vercel.app" }],
+        destination: `https://${CANONICAL_DOMAIN}/:path*`,
+        permanent: false,
+      },
+    ];
   },
   async headers() {
     return [
@@ -78,6 +91,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**.r2.cloudflarestorage.com" },
       { protocol: "https", hostname: "**.s3.amazonaws.com" },
+      { protocol: "https", hostname: "**.public.blob.vercel-storage.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
