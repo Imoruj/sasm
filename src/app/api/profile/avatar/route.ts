@@ -5,13 +5,8 @@ import { z } from "zod";
 import { ok, err } from "@/types/api";
 import { deleteFile, extractKeyFromUrl } from "@/lib/storage";
 
-const STORAGE_PUBLIC_URL = process.env.STORAGE_PUBLIC_URL ?? "";
-
 const schema = z.object({
-  avatarUrl: z.string().url("Invalid URL").refine((url) => {
-    if (!STORAGE_PUBLIC_URL) return true;
-    return url.startsWith(STORAGE_PUBLIC_URL);
-  }, "URL must be from our storage bucket"),
+  avatarUrl: z.string().url("Invalid URL"),
 });
 
 export async function PATCH(req: NextRequest) {

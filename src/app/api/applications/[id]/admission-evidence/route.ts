@@ -2,53 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
-import { getUploadPresignedUrl } from "@/lib/storage";
 import { applicantLimiter } from "@/lib/ratelimit";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-/** GET — return a presigned upload URL for bank-transfer evidence */
-export async function GET(req: Request, { params }: RouteContext) {
-  try {
-    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
-    const { success } = await applicantLimiter.limit(ip);
-    if (!success) return NextResponse.json(err("RATE_LIMIT", "Too many requests."), { status: 429 });
-
-    const session = await auth();
-    if (!session?.user) return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
-
-    const { id } = await params;
-
-    const application = await db.application.findFirst({
-      where: { id, applicantId: session.user.id, status: "ADMITTED" },
-      select: { id: true },
-    });
-    if (!application) {
-      return NextResponse.json(err("NOT_FOUND", "Application not found or not in ADMITTED status"), { status: 404 });
-    }
-
-    // Reject if already paid
-    const existingPaid = await db.payment.findFirst({
-      where: { applicationId: id, paymentType: "ADMISSION_FEE", status: "PAID" },
-    });
-    if (existingPaid) {
-      return NextResponse.json(err("ALREADY_PAID", "Admission acceptance fee has already been paid"), { status: 400 });
-    }
-
-    const { uploadUrl, publicUrl } = await getUploadPresignedUrl(
-      `admission-evidence/${id}`,
-      `receipt-${Date.now()}.jpg`,
-      "image/jpeg",
-      300,
-    );
-
-    return NextResponse.json(ok({ uploadUrl, publicUrl }));
-  } catch (error) {
-    console.error("[GET_ADMISSION_EVIDENCE_URL]", error);
-    return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong"), { status: 500 });
-  }
-}
 
 const confirmSchema = z.object({
   receiptUrl: z.string().url(),

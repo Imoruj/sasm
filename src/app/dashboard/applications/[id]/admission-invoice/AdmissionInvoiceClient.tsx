@@ -88,29 +88,17 @@ export default function AdmissionInvoiceClient({
     setUploading(true);
 
     try {
-      // Step 1: Get presigned upload URL
-      const urlRes = await fetch(
-        `/api/applications/${applicationId}/admission-evidence`,
-      );
-      if (!urlRes.ok) {
-        const j = await urlRes.json();
-        throw new Error(j.error?.message ?? "Failed to get upload URL");
-      }
-      const { data } = await urlRes.json();
-      const { uploadUrl, publicUrl } = data as {
-        uploadUrl: string;
-        publicUrl: string;
-      };
+      // Step 1: Upload file to storage
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      uploadFormData.append("folder", `admission-evidence/${applicationId}`);
 
-      // Step 2: Upload file directly to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
+      const uploadRes = await fetch("/api/uploads", { method: "POST", body: uploadFormData });
       if (!uploadRes.ok) throw new Error("Upload failed. Please try again.");
+      const { data: uploadData } = await uploadRes.json();
+      const publicUrl = uploadData.publicUrl as string;
 
-      // Step 3: Save receipt URL → create/update Payment record
+      // Step 2: Save receipt URL → create/update Payment record
       const saveRes = await fetch(
         `/api/applications/${applicationId}/admission-evidence`,
         {

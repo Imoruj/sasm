@@ -3,28 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 import { z } from "zod";
-import { getUploadPresignedUrl, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from "@/lib/storage";
-
-const requestUploadSchema = z.object({
-  documentType: z.enum([
-    "PASSPORT_PHOTO",
-    "BIRTH_CERTIFICATE",
-    "AGE_DECLARATION",
-    "REPORT_CARD",
-    "TESTIMONIAL",
-    "TRANSFER_LETTER",
-    "HEALTH_RECORD",
-    "IMMUNIZATION_CARD",
-    "WAEC_RESULT",
-    "NECO_RESULT",
-    "OTHER",
-  ]),
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().refine((v) => ALLOWED_MIME_TYPES.includes(v), {
-    message: "File type not allowed. Accepted: PDF, JPG, PNG, DOCX",
-  }),
-  fileSize: z.number().int().min(1).max(MAX_FILE_SIZE),
-});
+import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from "@/lib/storage";
 
 const confirmUploadSchema = z.object({
   documentType: z.enum([
@@ -105,22 +84,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       );
     }
 
-    // ─── Phase 1: Request presigned URL ──────────────────────────────────────
-    if (action === "request-url") {
-      const validated = requestUploadSchema.safeParse(body);
-      if (!validated.success) {
-        return NextResponse.json(err("VALIDATION_ERROR", "Invalid input", validated.error.flatten()), { status: 400 });
-      }
-
-      const { documentType, fileName, mimeType } = validated.data;
-      const folder = `documents/${id}/${documentType.toLowerCase()}`;
-
-      const { uploadUrl, key, publicUrl } = await getUploadPresignedUrl(folder, fileName, mimeType);
-
-      return NextResponse.json(ok({ uploadUrl, key, publicUrl }));
-    }
-
-    // ─── Phase 2: Confirm upload ──────────────────────────────────────────────
+    // ─── Confirm upload (file was already uploaded via /api/uploads) ─────────
     if (action === "confirm") {
       const validated = confirmUploadSchema.safeParse(body);
       if (!validated.success) {

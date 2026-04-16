@@ -127,42 +127,24 @@ function DocumentRow({
 
     setUploading(true);
     try {
-      // Phase 1 — get presigned URL
-      const urlRes = await fetch(`/api/applications/${applicationId}/documents`, {
+      // Phase 1 — upload file to storage
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      uploadFormData.append("folder", `documents/${applicationId}/${doc.type.toLowerCase()}`);
+
+      const uploadRes = await fetch("/api/uploads", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "request-url",
-          documentType: doc.type,
-          fileName: file.name,
-          mimeType: file.type,
-          fileSize: file.size,
-        }),
+        body: uploadFormData,
       });
-      const urlJson = await urlRes.json();
-      if (!urlJson.success) {
-        toast.error(urlJson.error?.message ?? "Failed to get upload URL");
+      const uploadJson = await uploadRes.json();
+      if (!uploadJson.success) {
+        toast.error(uploadJson.error?.message ?? "Upload failed. Please try again.");
         return;
       }
 
-      const { uploadUrl, publicUrl } = urlJson.data as {
-        uploadUrl: string;
-        key: string;
-        publicUrl: string;
-      };
+      const { publicUrl } = uploadJson.data as { key: string; publicUrl: string };
 
-      // Phase 2 — upload directly to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!uploadRes.ok) {
-        toast.error("Upload failed. Please try again.");
-        return;
-      }
-
-      // Phase 3 — confirm with server
+      // Phase 2 — confirm with server
       const confirmRes = await fetch(`/api/applications/${applicationId}/documents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

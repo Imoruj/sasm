@@ -74,19 +74,15 @@ export default function InvoiceClient({
     setUploading(true);
 
     try {
-      // Get presigned URL
-      const res = await fetch(`/api/applications/${applicationId}/payment-evidence`);
-      if (!res.ok) throw new Error("Failed to get upload URL");
-      const { data } = await res.json();
-      const { uploadUrl, publicUrl } = data as { uploadUrl: string; publicUrl: string };
+      // Upload file to storage
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      uploadFormData.append("folder", `payment-evidence/${applicationId}`);
 
-      // Upload to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
+      const uploadRes = await fetch("/api/uploads", { method: "POST", body: uploadFormData });
       if (!uploadRes.ok) throw new Error("Upload failed");
+      const { data: uploadData } = await uploadRes.json();
+      const publicUrl = uploadData.publicUrl as string;
 
       // Save URL to application
       const patchRes = await fetch(`/api/applications/${applicationId}/payment-evidence`, {

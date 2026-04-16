@@ -26,38 +26,31 @@ export function useFileUpload(): UseFileUploadReturn {
     setProgress(0);
 
     try {
-      // Get presigned URL
-      const presignRes = await fetch("/api/uploads/presign", {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", folder);
+
+      setProgress(30);
+
+      const res = await fetch("/api/uploads", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type, folder }),
+        body: formData,
       });
 
-      if (!presignRes.ok) throw new Error("Failed to get upload URL");
-      const { data } = await presignRes.json();
+      setProgress(90);
 
-      // Upload directly to S3/R2
-      const xhr = new XMLHttpRequest();
-      await new Promise<void>((resolve, reject) => {
-        xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-        });
-        xhr.addEventListener("load", () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error("Upload failed"));
-        });
-        xhr.addEventListener("error", () => reject(new Error("Upload error")));
-        xhr.open("PUT", data.uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
-        xhr.send(file);
-      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.error?.message ?? "Upload failed");
+      }
 
+      const { data } = await res.json();
       setProgress(100);
       return { key: data.key, publicUrl: data.publicUrl };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Upload failed";
       setError(msg);
-      throw err;
+      throw e;
     } finally {
       setIsUploading(false);
     }
