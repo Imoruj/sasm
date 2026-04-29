@@ -16,6 +16,8 @@ export const createApplicationSchema = z.object({
     "BASIC1", "BASIC2", "BASIC3", "BASIC4", "BASIC5", "BASIC6",
     "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3",
   ]),
+  // Admin acting-as-applicant mode
+  actingApplicantEmail: z.string().email().optional(),
 });
 
 export const studentInfoSchema = z.object({

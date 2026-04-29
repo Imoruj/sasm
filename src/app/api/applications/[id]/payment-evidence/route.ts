@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
+import type { ApplicationStatus } from "@prisma/client";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const ALLOWED_PAYMENT_EVIDENCE_STATUSES: ApplicationStatus[] = ["DRAFT", "REVISION_REQUIRED", "UNDER_REVIEW"];
 
 /** PATCH — save the uploaded evidence URL to the application */
 export async function PATCH(req: Request, { params }: RouteContext) {
@@ -18,12 +21,22 @@ export async function PATCH(req: Request, { params }: RouteContext) {
       return NextResponse.json(err("VALIDATION_ERROR", "evidenceUrl is required"), { status: 400 });
     }
 
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? {
+          id,
+          applicantId: session.user.id,
+          status: { in: ALLOWED_PAYMENT_EVIDENCE_STATUSES },
+        }
+      : {
+          id,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+          status: { in: ALLOWED_PAYMENT_EVIDENCE_STATUSES },
+        };
+
     const application = await db.application.findFirst({
-      where: {
-        id,
-        applicantId: session.user.id,
-        status: { in: ["DRAFT", "REVISION_REQUIRED", "UNDER_REVIEW"] },
-      },
+      where: applicationWhere,
       select: { id: true, status: true },
     });
     if (!application) return NextResponse.json(err("NOT_FOUND", "Application not found"), { status: 404 });

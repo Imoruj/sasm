@@ -10,8 +10,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!session?.user) return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
 
     const { id } = await params;
+
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? { id, applicantId: session.user.id }
+      : {
+          id,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        };
     const application = await db.application.findFirst({
-      where: { id, applicantId: session.user.id },
+      where: applicationWhere,
       include: {
         branch: true,
         admissionCycle: true,
@@ -37,8 +46,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!session?.user) return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
 
     const { id } = await params;
+
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? { id, applicantId: session.user.id }
+      : {
+          id,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        };
     const application = await db.application.findFirst({
-      where: { id, applicantId: session.user.id },
+      where: applicationWhere,
       select: { id: true, status: true },
     });
 

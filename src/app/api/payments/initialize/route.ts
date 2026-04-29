@@ -32,9 +32,18 @@ export async function POST(req: Request) {
 
     const { applicationId, paymentType, placementTestType } = validated.data;
 
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? { id: applicationId, applicantId: session.user.id }
+      : {
+          id: applicationId,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        };
+
     // Load application + applicant + fee structure
     const application = await db.application.findFirst({
-      where: { id: applicationId, applicantId: session.user.id },
+      where: applicationWhere,
       include: {
         applicant: { select: { email: true, firstName: true, lastName: true } },
         admissionCycle: true,

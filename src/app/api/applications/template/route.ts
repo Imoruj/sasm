@@ -24,6 +24,12 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const branchIdParam = searchParams.get("branchId");
+    const allowedBranchId =
+      session.user.role === "SCHOOL_ADMIN" ? session.user.branchId ?? null : null;
+
+    if (allowedBranchId && branchIdParam && branchIdParam !== allowedBranchId) {
+      return NextResponse.json(err("FORBIDDEN", "Insufficient permissions for this branch"), { status: 403 });
+    }
 
     const templateSelect = {
       id: true,
@@ -53,7 +59,9 @@ export async function GET(req: Request) {
       }
     } else {
       template = await db.formTemplate.findFirst({
-        where: { organizationId, status: "PUBLISHED" },
+        where: allowedBranchId
+          ? { organizationId, status: "PUBLISHED", OR: [{ branchId: allowedBranchId }, { branchId: null }] }
+          : { organizationId, status: "PUBLISHED" },
         select: templateSelect,
         orderBy,
       });

@@ -9,8 +9,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!session?.user) return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
 
     const { id } = await params;
+
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? { id, applicantId: session.user.id }
+      : {
+          id,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        };
     const application = await db.application.findFirst({
-      where: { id, applicantId: session.user.id },
+      where: applicationWhere,
     });
 
     if (!application) return NextResponse.json(err("NOT_FOUND", "Application not found"), { status: 404 });

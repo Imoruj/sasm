@@ -16,10 +16,14 @@ export async function GET(req: Request) {
 
     const orgId = await resolveSessionOrganizationId(session.user.id, session.user.organizationId);
     const orgFilter = orgId ? { organizationId: orgId } : {};
+    const branchScope =
+      session.user.role === "SCHOOL_ADMIN" && session.user.branchId
+        ? { id: session.user.branchId }
+        : {};
 
     const [branches, cycles, templates] = await Promise.all([
       db.branch.findMany({
-        where: { isActive: true, ...orgFilter },
+        where: { isActive: true, ...orgFilter, ...branchScope },
         select: { id: true, name: true, address: true, state: true, city: true },
         orderBy: { name: "asc" },
       }),
@@ -29,7 +33,10 @@ export async function GET(req: Request) {
         orderBy: { createdAt: "desc" },
       }),
       db.formTemplate.findMany({
-        where: { status: "PUBLISHED", ...orgFilter },
+        where:
+          session.user.role === "SCHOOL_ADMIN" && session.user.branchId
+            ? { status: "PUBLISHED", ...orgFilter, OR: [{ branchId: session.user.branchId }, { branchId: null }] }
+            : { status: "PUBLISHED", ...orgFilter },
         select: { branchId: true },
       }),
     ]);

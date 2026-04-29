@@ -47,11 +47,14 @@ export async function POST(req: Request) {
       return NextResponse.json(err("VALIDATION_ERROR", "Invalid input", validated.error.flatten()), { status: 400 });
     }
 
-    const { branchId, admissionCycleId, classApplied, templateId } = validated.data;
+    const { branchId, admissionCycleId, classApplied, templateId, actingApplicantEmail } = validated.data;
 
-    const organizationId = await resolveSessionOrganizationId(session.user.id, session.user.organizationId);
+    const isApplicant = session.user.role === "APPLICANT";
+    const organizationId = isApplicant
+      ? await resolveSessionOrganizationId(session.user.id, session.user.organizationId)
+      : session.user.organizationId ?? null;
     if (!organizationId) {
-      return NextResponse.json(err("NOT_FOUND", "No school context found for this applicant"), { status: 404 });
+      return NextResponse.json(err("NOT_FOUND", "No school context found for this user"), { status: 404 });
     }
 
     const template = await db.formTemplate.findFirst({
@@ -79,6 +82,14 @@ export async function POST(req: Request) {
     if (!resolvedBranchId) {
       return NextResponse.json(err("VALIDATION_ERROR", "The published template is not linked to a branch"), { status: 400 });
     }
+
+    if (
+      session.user.role === "SCHOOL_ADMIN" &&
+      session.user.branchId &&
+      resolvedBranchId !== session.user.branchId
+    ) {
+      return NextResponse.json(err("FORBIDDEN", "Insufficient permissions for the selected branch"), { status: 403 });
+    }
     const resolvedAdmissionCycle = await resolveAdmissionCycle(template.organizationId, admissionCycleId);
     if (!resolvedAdmissionCycle) {
       return NextResponse.json(err("VALIDATION_ERROR", "No active admission cycle is available for this template"), { status: 400 });
@@ -96,6 +107,33 @@ export async function POST(req: Request) {
       }),
     ]);
     if (!branch) return NextResponse.json(err("NOT_FOUND", "Branch not found"), { status: 404 });
+
+    // If admin is acting on behalf of an applicant, resolve that applicant account here.
+    let applicantId = session.user.id;
+    if (!isApplicant) {
+      if (!actingApplicantEmail) {
+        return NextResponse.json(
+          err("VALIDATION_ERROR", "actingApplicantEmail is required when creating on behalf of an applicant"),
+          { status: 400 },
+        );
+      }
+
+      const actingApplicant = await db.user.findFirst({
+        where: {
+          email: actingApplicantEmail,
+          role: "APPLICANT",
+          isActive: true,
+          organizationId,
+        },
+        select: { id: true },
+      });
+
+      if (!actingApplicant) {
+        return NextResponse.json(err("NOT_FOUND", "Applicant account not found"), { status: 404 });
+      }
+
+      applicantId = actingApplicant.id;
+    }
 
     // Count existing applications for this branch in the current year to build a sequential number
     const year = new Date().getFullYear();
@@ -115,7 +153,7 @@ export async function POST(req: Request) {
     const application = await db.application.create({
       data: {
         applicationNumber,
-        applicantId: session.user.id,
+        applicantId,
         organizationId: branch.organizationId,
         branchId: resolvedBranchId,
         admissionCycleId: resolvedAdmissionCycle.id,

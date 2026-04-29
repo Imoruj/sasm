@@ -29,8 +29,17 @@ export async function GET(req: Request) {
 
     const { applicationId } = parsed.data;
 
+    const isApplicant = session.user.role === "APPLICANT";
+    const applicationWhere = isApplicant
+      ? { id: applicationId, applicantId: session.user.id }
+      : {
+          id: applicationId,
+          organizationId: session.user.organizationId ?? "",
+          ...(session.user.branchId ? { branchId: session.user.branchId } : {}),
+        };
+
     const application = await db.application.findFirst({
-      where: { id: applicationId, applicantId: session.user.id },
+      where: applicationWhere,
       select: { branchId: true, admissionCycleId: true, classApplied: true, organizationId: true },
     });
 

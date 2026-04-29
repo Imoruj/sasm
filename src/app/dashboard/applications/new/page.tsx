@@ -475,6 +475,7 @@ function PaymentInvoiceStep({
 export default function NewApplicationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const actingApplicantEmail = searchParams.get("actingApplicantEmail") ?? undefined;
 
   const pageTopRef = useRef<HTMLDivElement | null>(null);
   const [currentStep, setCurrentStep]             = useState(0);
@@ -797,6 +798,7 @@ export default function NewApplicationPage() {
           branchId,
           admissionCycleId: data.admissionCycleId,
           classApplied: data.classApplied,
+          ...(actingApplicantEmail ? { actingApplicantEmail } : {}),
         }),
       });
       const json = await res.json();
