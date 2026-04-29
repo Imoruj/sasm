@@ -15,7 +15,7 @@ export default function AdminStartApplicationPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleContinue() {
+  async function handleContinue() {
     const email = applicantEmail.trim();
     if (!email) {
       setError("Applicant email is required.");
@@ -25,8 +25,27 @@ export default function AdminStartApplicationPage() {
     setError(null);
     setCreating(true);
 
-    // Jump straight into the exact same multi-step wizard used by the applicant.
-    router.push(`/dashboard/applications/new?actingApplicantEmail=${encodeURIComponent(email)}`);
+    try {
+      // If the applicant already has a draft, resume it and the wizard will auto-jump
+      // to the step they stopped at.
+      const res = await fetch("/api/admin/applications/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicantEmail: email }),
+      });
+      const json = await res.json();
+
+      if (res.ok && json?.success && json.data?.applicationId) {
+        router.push(`/dashboard/applications/new?resume=${encodeURIComponent(json.data.applicationId)}&actingApplicantEmail=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      // Otherwise start fresh in acting-as-applicant mode.
+      router.push(`/dashboard/applications/new?actingApplicantEmail=${encodeURIComponent(email)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to continue.");
+      setCreating(false);
+    }
   }
 
   return (
