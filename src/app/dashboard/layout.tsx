@@ -2,47 +2,31 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { resolveSessionOrganizationId } from "@/lib/tenant";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 
 export async function generateMetadata(): Promise<Metadata> {
   const session = await auth();
+  if (!session?.user) return {};
 
-  if (!session?.user) {
-    return {};
-  }
+  const orgId = await resolveSessionOrganizationId(session.user.id, session.user.organizationId);
+  if (!orgId) return {};
 
-  const [directOrg, recentApplication] = await Promise.all([
-    session.user.organizationId
-      ? db.organization.findUnique({
-          where: { id: session.user.organizationId },
-          select: { name: true, logoUrl: true, updatedAt: true },
-        })
-      : Promise.resolve(null),
-    db.application.findFirst({
-      where: { applicantId: session.user.id },
-      select: {
-        organization: {
-          select: { name: true, logoUrl: true, updatedAt: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
-
-  const branding = directOrg ?? recentApplication?.organization ?? null;
-  if (!branding?.logoUrl) {
-    return {};
-  }
+  const org = await db.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true, logoUrl: true, updatedAt: true },
+  });
+  if (!org?.logoUrl) return {};
 
   return {
     icons: {
-      icon: `/api/favicon?v=${branding.updatedAt.getTime()}`,
-      shortcut: `/api/favicon?v=${branding.updatedAt.getTime()}`,
-      apple: `/api/favicon?v=${branding.updatedAt.getTime()}`,
+      icon: `/api/favicon?v=${org.updatedAt.getTime()}`,
+      shortcut: `/api/favicon?v=${org.updatedAt.getTime()}`,
+      apple: `/api/favicon?v=${org.updatedAt.getTime()}`,
     },
     title: {
-      default: `${branding.name} | SAMS`,
-      template: `%s | ${branding.name}`,
+      default: `${org.name} | SAMS`,
+      template: `%s | ${org.name}`,
     },
   };
 }
@@ -57,7 +41,9 @@ export default async function ApplicantLayout({ children }: { children: React.Re
     redirect("/login");
   }
 
-  const [unreadCount, user, directOrg, recentApplication] = await Promise.all([
+  const orgId = await resolveSessionOrganizationId(session.user.id, session.user.organizationId);
+
+  const [unreadCount, user, org] = await Promise.all([
     db.notification.count({
       where: { userId: session.user.id, isRead: false },
     }),
@@ -65,24 +51,13 @@ export default async function ApplicantLayout({ children }: { children: React.Re
       where: { id: session.user.id },
       select: { avatarUrl: true },
     }),
-    session.user.organizationId
+    orgId
       ? db.organization.findUnique({
-          where: { id: session.user.organizationId },
-          select: { name: true, logoUrl: true, updatedAt: true },
+          where: { id: orgId },
+          select: { name: true, logoUrl: true },
         })
       : Promise.resolve(null),
-    db.application.findFirst({
-      where: { applicantId: session.user.id },
-      select: {
-        organization: {
-          select: { name: true, logoUrl: true, updatedAt: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
   ]);
-
-  const branding = directOrg ?? recentApplication?.organization ?? null;
 
   return (
     <DashboardLayout
@@ -91,8 +66,8 @@ export default async function ApplicantLayout({ children }: { children: React.Re
       userEmail={session.user.email}
       userAvatar={user?.avatarUrl ?? null}
       unreadCount={unreadCount}
-      orgName={branding?.name ?? "SAMS"}
-      orgLogo={branding?.logoUrl ?? null}
+      orgName={org?.name}
+      orgLogo={org?.logoUrl ?? null}
     >
       {children}
     </DashboardLayout>

@@ -12,6 +12,7 @@ const createSchema = z.object({
   schema:        z.record(z.unknown()).optional().default({}),
   status:        z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"),
   isDefault:     z.boolean().default(false),
+  branchId:      z.string().uuid().nullable().optional(),
 });
 
 export async function GET() {
@@ -55,12 +56,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { classLevels, enabledFields, schema, ...rest } = parsed.data;
+  const { classLevels, enabledFields, schema, branchId: bodyBranchId, ...rest } = parsed.data;
 
   // Merge enabledFields into schema if provided
   const mergedSchema = enabledFields !== undefined
     ? { ...schema, enabledFields }
     : schema;
+
+  // Branch admins are locked to their own branch; super/school admins can choose
+  const resolvedBranchId = session.user.branchId ?? bodyBranchId ?? null;
 
   const template = await db.formTemplate.create({
     data: {
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
       schema:         mergedSchema as never,
       classLevels:    classLevels as never,
       organizationId: session.user.organizationId ?? "",
-      branchId:       session.user.branchId ?? null,
+      branchId:       resolvedBranchId,
     },
   });
 

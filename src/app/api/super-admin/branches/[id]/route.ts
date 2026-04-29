@@ -4,6 +4,41 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    let session = null;
+    let authError = null;
+    try {
+      session = await auth();
+    } catch (e) {
+      authError = e instanceof Error ? e.message : String(e);
+    }
+    if (authError) {
+      return NextResponse.json({ authError, step: "auth()" }, { status: 500 });
+    }
+    if (!session?.user) {
+      return NextResponse.json(err("UNAUTHORIZED", "Not authenticated"), { status: 401 });
+    }
+    const branch = await db.branch.findUnique({
+      where: { id },
+      select: { id: true, name: true, organizationId: true },
+    }).catch((e: unknown) => ({ dbError: String(e) }));
+    return NextResponse.json(ok({
+      sessionUserId: session.user.id,
+      sessionRole: session.user.role,
+      sessionOrgId: session.user.organizationId,
+      branchId: id,
+      branch,
+    }));
+  } catch (e) {
+    return NextResponse.json({ topLevelError: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}
+
 const updateBranchSchema = z.object({
   name: z.string().min(2).max(255).optional(),
   code: z
@@ -96,33 +131,34 @@ export async function PATCH(
         : {}),
     };
 
-    const updated = await db.$transaction(async (tx) => {
-      const updatedBranch = await tx.branch.update({
-        where: { id },
-        data: updateData,
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: session.user.id,
-          organizationId,
-          action: "BRANCH_UPDATED",
-          entityType: "Branch",
-          entityId: id,
-          changes: { before: branch, after: updatedBranch },
-          ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-          userAgent: req.headers.get("user-agent") ?? "",
-        },
-      });
-
-      return updatedBranch;
+    const updatedBranch = await db.branch.update({
+      where: { id },
+      data: updateData,
     });
 
-    return NextResponse.json(ok(updated));
+    // Fire-and-forget audit log (don't block the response on it)
+    db.auditLog.create({
+      data: {
+        userId: session.user.id,
+        organizationId,
+        action: "BRANCH_UPDATED",
+        entityType: "Branch",
+        entityId: id,
+        changes: {
+          before: { name: branch.name, code: branch.code, isActive: branch.isActive },
+          after: { name: updatedBranch.name, code: updatedBranch.code, isActive: updatedBranch.isActive },
+        },
+        ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+        userAgent: req.headers.get("user-agent") ?? "",
+      },
+    }).catch((e: unknown) => console.error("[AUDIT_LOG_ERROR]", e));
+
+    return NextResponse.json(ok(updatedBranch));
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("[UPDATE_BRANCH]", error);
     return NextResponse.json(
-      err("INTERNAL_ERROR", "Something went wrong."),
+      err("INTERNAL_ERROR", `Branch update failed: ${msg}`),
       { status: 500 }
     );
   }
@@ -176,22 +212,20 @@ export async function DELETE(
         );
       }
 
-      await db.$transaction(async (tx) => {
-        await tx.branch.delete({ where: { id } });
+      await db.branch.delete({ where: { id } });
 
-        await tx.auditLog.create({
-          data: {
-            userId: session.user.id,
-            organizationId,
-            action: "BRANCH_DELETED",
-            entityType: "Branch",
-            entityId: id,
-            changes: { deleted: branch },
-            ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-            userAgent: req.headers.get("user-agent") ?? "",
-          },
-        });
-      });
+      db.auditLog.create({
+        data: {
+          userId: session.user.id,
+          organizationId,
+          action: "BRANCH_DELETED",
+          entityType: "Branch",
+          entityId: id,
+          changes: { deleted: { name: branch.name, code: branch.code } },
+          ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+          userAgent: req.headers.get("user-agent") ?? "",
+        },
+      }).catch((e: unknown) => console.error("[AUDIT_LOG_ERROR]", e));
 
       return NextResponse.json(ok({ id, deleted: true }));
     }
@@ -204,33 +238,30 @@ export async function DELETE(
       );
     }
 
-    const deactivated = await db.$transaction(async (tx) => {
-      const result = await tx.branch.update({
-        where: { id },
-        data: { isActive: false },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: session.user.id,
-          organizationId,
-          action: "BRANCH_DEACTIVATED",
-          entityType: "Branch",
-          entityId: id,
-          changes: { before: { isActive: true }, after: { isActive: false } },
-          ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-          userAgent: req.headers.get("user-agent") ?? "",
-        },
-      });
-
-      return result;
+    const deactivated = await db.branch.update({
+      where: { id },
+      data: { isActive: false },
     });
+
+    db.auditLog.create({
+      data: {
+        userId: session.user.id,
+        organizationId,
+        action: "BRANCH_DEACTIVATED",
+        entityType: "Branch",
+        entityId: id,
+        changes: { before: { isActive: true }, after: { isActive: false } },
+        ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+        userAgent: req.headers.get("user-agent") ?? "",
+      },
+    }).catch((e: unknown) => console.error("[AUDIT_LOG_ERROR]", e));
 
     return NextResponse.json(ok(deactivated));
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("[BRANCH_DELETE]", error);
     return NextResponse.json(
-      err("INTERNAL_ERROR", "Something went wrong."),
+      err("INTERNAL_ERROR", `Branch delete failed: ${msg}`),
       { status: 500 }
     );
   }

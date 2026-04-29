@@ -9,26 +9,22 @@ interface Props {
 
 export default async function FormBuilderPage({ searchParams }: Props) {
   const session = await auth();
+  const orgId = session!.user.organizationId ?? "";
   const { id } = await searchParams;
 
-  // If editing an existing template, load it
-  let template: {
-    id:           string;
-    name:         string;
-    description:  string | null;
-    classLevels:  string[];
-    status:       "DRAFT" | "PUBLISHED" | "ARCHIVED";
-    schema:       unknown;
-  } | null = null;
+  const [templateRaw, branches] = await Promise.all([
+    id ? db.formTemplate.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true, name: true, description: true, classLevels: true, status: true, schema: true, branchId: true },
+    }) : null,
+    db.branch.findMany({
+      where: { organizationId: orgId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
-  if (id) {
-    template = await db.formTemplate.findFirst({
-      where: { id, organizationId: session!.user.organizationId ?? "" },
-      select: { id: true, name: true, description: true, classLevels: true, status: true, schema: true },
-    });
-  }
-
-  const schema        = (template?.schema ?? {}) as Record<string, unknown>;
+  const schema        = (templateRaw?.schema ?? {}) as Record<string, unknown>;
   const enabledFields = Array.isArray(schema.enabledFields) ? (schema.enabledFields as string[]) : undefined;
 
   return (
@@ -44,12 +40,14 @@ export default async function FormBuilderPage({ searchParams }: Props) {
       />
 
       <FormBuilderClient
-        templateId={template?.id}
-        initialName={template?.name ?? "Standard Admission Form"}
-        initialDescription={template?.description ?? ""}
-        initialClassLevels={template?.classLevels ?? []}
-        initialStatus={template?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT"}
+        templateId={templateRaw?.id}
+        initialName={templateRaw?.name ?? "Standard Admission Form"}
+        initialDescription={templateRaw?.description ?? ""}
+        initialClassLevels={templateRaw?.classLevels ?? []}
+        initialStatus={templateRaw?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT"}
         initialEnabledFields={enabledFields}
+        initialBranchId={templateRaw?.branchId ?? null}
+        branches={branches}
       />
     </div>
   );

@@ -23,10 +23,13 @@ import { CLASS_LEVEL_CONFIG, CLASS_LEVELS } from "@/constants/classLevels";
 
 // Group class levels for the picker
 const CLASS_GROUPS = [
-  { label: "Early Years", keys: ["NURSERY", "PRIMARY"] },
+  { label: "Early Years", keys: ["PRE_NURSERY", "NURSERY1", "NURSERY2", "NURSERY", "PRIMARY"] },
+  { label: "Basic",       keys: ["BASIC1", "BASIC2", "BASIC3", "BASIC4", "BASIC5", "BASIC6"] },
   { label: "Junior",      keys: ["JSS1", "JSS2", "JSS3"] },
   { label: "Senior",      keys: ["SS1", "SS2", "SS3"] },
 ] as const;
+
+interface Branch { id: string; name: string; }
 
 interface Props {
   templateId?: string;
@@ -35,6 +38,8 @@ interface Props {
   initialClassLevels?: string[];
   initialStatus?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   initialEnabledFields?: string[];
+  initialBranchId?: string | null;
+  branches?: Branch[];
 }
 
 export default function FormBuilderClient({
@@ -44,6 +49,8 @@ export default function FormBuilderClient({
   initialClassLevels  = [],
   initialStatus       = "DRAFT",
   initialEnabledFields,
+  initialBranchId     = null,
+  branches            = [],
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -52,6 +59,7 @@ export default function FormBuilderClient({
   const [name,         setName]        = useState(initialName);
   const [description,  setDescription] = useState(initialDescription);
   const [classLevels,  setClassLevels] = useState<string[]>(initialClassLevels);
+  const [branchId,     setBranchId]    = useState<string | null>(initialBranchId);
   const [status,       setStatus]      = useState<"DRAFT" | "PUBLISHED">(
     initialStatus === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
   );
@@ -108,6 +116,7 @@ export default function FormBuilderClient({
         description,
         classLevels,
         status,
+        branchId: branchId ?? null,
         enabledFields: [...enabled],
       };
 
@@ -146,7 +155,7 @@ export default function FormBuilderClient({
       {/* ── Settings bar ── */}
       <Card>
         <CardContent className="p-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="lg:col-span-2">
               <Label htmlFor="tpl-name" className="mb-1.5 block text-xs font-medium text-gray-700">Template Name</Label>
               <Input
@@ -155,6 +164,27 @@ export default function FormBuilderClient({
                 onChange={(e) => { setName(e.target.value); setSaved(false); }}
                 placeholder="e.g. JSS 1 Admission Form"
               />
+            </div>
+
+            {/* Branch selector */}
+            <div>
+              <Label className="mb-1.5 block text-xs font-medium text-gray-700">Branch</Label>
+              <Select
+                value={branchId ?? "ALL"}
+                onValueChange={(v) => { setBranchId(v === "ALL" ? null : v); setSaved(false); }}
+              >
+                <SelectTrigger>
+                  <span className="truncate text-sm">
+                    {branchId ? (branches.find((b) => b.id === branchId)?.name ?? "All Branches") : "All Branches"}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Branches</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {/* ── Multi-select class level picker ── */}
             <div>
@@ -397,7 +427,21 @@ export default function FormBuilderClient({
               Saved
             </span>
           )}
-          <Button variant="outline" onClick={() => router.push("/admin/forms")}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!saved && (
+                name !== initialName ||
+                description !== initialDescription ||
+                branchId !== initialBranchId ||
+                classLevels.length !== initialClassLevels.length ||
+                classLevels.some((c, i) => c !== initialClassLevels[i])
+              )) {
+                if (!window.confirm("You have unsaved changes. Leave without saving?")) return;
+              }
+              router.push("/admin/forms");
+            }}
+          >
             Cancel
           </Button>
           <Button onClick={save} disabled={isPending}>

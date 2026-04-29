@@ -11,6 +11,7 @@ const patchSchema = z.object({
   enabledFields:  z.array(z.string()).optional(),
   status:         z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
   isDefault:      z.boolean().optional(),
+  branchId:       z.string().uuid().nullable().optional(),
 });
 
 // Branch-scoped where clause: branch admins can only touch their own branch's templates
@@ -55,7 +56,7 @@ export async function PATCH(
     );
   }
 
-  const { enabledFields, classLevels, ...rest } = parsed.data;
+  const { enabledFields, classLevels, branchId: bodyBranchId, ...rest } = parsed.data;
 
   // Merge enabledFields into the schema JSON
   const currentSchema = (existing.schema as Record<string, unknown>) ?? {};
@@ -63,11 +64,17 @@ export async function PATCH(
     ? { ...currentSchema, enabledFields }
     : currentSchema;
 
+  // Branch admins are locked to their own branch
+  const resolvedBranchId = session.user.branchId !== undefined && session.user.branchId !== null
+    ? session.user.branchId
+    : bodyBranchId;
+
   const updated = await db.formTemplate.update({
     where: { id },
     data: {
       ...rest,
       ...(classLevels !== undefined ? { classLevels: classLevels as never } : {}),
+      ...(resolvedBranchId !== undefined ? { branchId: resolvedBranchId } : {}),
       schema: newSchema as never,
       version: { increment: 1 },
     },

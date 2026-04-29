@@ -34,10 +34,12 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    // A template with branchId=null applies to ALL branches
+    const hasGlobalTemplate = templates.some((t) => t.branchId === null);
+
     const branchesWithTemplate = branches.map((b) => ({
       ...b,
-      // Only show branch if it has a template explicitly assigned to it
-      hasTemplate: templates.some((t) => t.branchId === b.id),
+      hasTemplate: hasGlobalTemplate || templates.some((t) => t.branchId === b.id),
     }));
 
     return NextResponse.json(ok({ branches: branchesWithTemplate, cycles }));

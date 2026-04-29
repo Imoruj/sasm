@@ -117,45 +117,42 @@ export async function POST(req: Request) {
       );
     }
 
-    const branch = await db.$transaction(async (tx) => {
-      const newBranch = await tx.branch.create({
-        data: {
-          organizationId,
-          name: validated.data.name,
-          code: validated.data.code.toUpperCase(),
-          address: validated.data.address,
-          state: validated.data.state,
-          lga: validated.data.lga,
-          city: validated.data.city ?? "",
-          phone: validated.data.phone,
-          email: validated.data.email,
-          capacity: validated.data.capacity,
-          contactPerson: validated.data.contactPerson,
-          isActive: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: session.user.id,
-          organizationId,
-          action: "BRANCH_CREATED",
-          entityType: "Branch",
-          entityId: newBranch.id,
-          changes: { after: newBranch },
-          ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
-          userAgent: req.headers.get("user-agent") ?? "",
-        },
-      });
-
-      return newBranch;
+    const newBranch = await db.branch.create({
+      data: {
+        organizationId,
+        name: validated.data.name,
+        code: validated.data.code.toUpperCase(),
+        address: validated.data.address,
+        state: validated.data.state,
+        lga: validated.data.lga,
+        city: validated.data.city ?? "",
+        phone: validated.data.phone,
+        email: validated.data.email,
+        capacity: validated.data.capacity,
+        contactPerson: validated.data.contactPerson,
+        isActive: true,
+      },
     });
 
-    return NextResponse.json(ok(branch), { status: 201 });
+    db.auditLog.create({
+      data: {
+        userId: session.user.id,
+        organizationId,
+        action: "BRANCH_CREATED",
+        entityType: "Branch",
+        entityId: newBranch.id,
+        changes: { after: { name: newBranch.name, code: newBranch.code } },
+        ipAddress: req.headers.get("x-forwarded-for") ?? "127.0.0.1",
+        userAgent: req.headers.get("user-agent") ?? "",
+      },
+    }).catch((e: unknown) => console.error("[AUDIT_LOG_ERROR]", e));
+
+    return NextResponse.json(ok(newBranch), { status: 201 });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("[CREATE_BRANCH]", error);
     return NextResponse.json(
-      err("INTERNAL_ERROR", "Something went wrong."),
+      err("INTERNAL_ERROR", `Branch create failed: ${msg}`),
       { status: 500 }
     );
   }

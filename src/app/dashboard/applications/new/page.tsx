@@ -48,7 +48,11 @@ type SaveStatus  = "idle" | "saving" | "saved" | "error";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
-const ALL_CLASSES = ["NURSERY", "PRIMARY", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"] as const;
+const ALL_CLASSES = [
+  "PRE_NURSERY", "NURSERY1", "NURSERY2", "NURSERY", "PRIMARY",
+  "BASIC1", "BASIC2", "BASIC3", "BASIC4", "BASIC5", "BASIC6",
+  "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3",
+] as const;
 const optionalUuid = (message: string) =>
   z.preprocess(
     (value) => (value === "" ? undefined : value),
@@ -650,7 +654,9 @@ export default function NewApplicationPage() {
   const selectedBranchId    = selectedBranchIdForQuery;
   const templateClassLevels = branchTemplate?.classLevels ?? [];
   const availableClasses    = selectedBranchId
-    ? (templateClassLevels.length > 0 ? (templateClassLevels as typeof ALL_CLASSES[number][]) : [...ALL_CLASSES])
+    ? (templateClassLevels.length > 0
+        ? [...ALL_CLASSES].filter((c) => (templateClassLevels as string[]).includes(c))
+        : [...ALL_CLASSES])
     : [];
   const resolvedAdmissionCycleId = branchTemplate?.resolvedAdmissionCycleId ?? null;
   const enabledFields       = branchTemplate?.enabledFields ?? ALL_FIELD_IDS;
@@ -1011,7 +1017,7 @@ export default function NewApplicationPage() {
                       </div>
                     ) : (
                       <div className="space-y-3 mt-1">
-                        {(["Early Years", "Junior", "Senior"] as const).map((group) => {
+                        {(["Early Years", "Basic", "Junior", "Senior"] as const).map((group) => {
                           const classesInGroup = availableClasses.filter(
                             (cl) => CLASS_LEVEL_CONFIG[cl].group === group,
                           );

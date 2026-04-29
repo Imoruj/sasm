@@ -36,8 +36,17 @@ enum AdmissionCycleStatus {
 }
 
 enum ClassLevel {
+  PRE_NURSERY
+  NURSERY1
+  NURSERY2
   NURSERY
   PRIMARY
+  BASIC1
+  BASIC2
+  BASIC3
+  BASIC4
+  BASIC5
+  BASIC6
   JSS1
   JSS2
   JSS3
