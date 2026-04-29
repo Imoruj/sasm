@@ -43,6 +43,8 @@ export async function POST(req: Request) {
       // We keep the same response shape to prevent email enumeration.
       console.error("[FORGOT_PASSWORD] Failed sending reset email", {
         email,
+        userId: user.id,
+        ip,
         error: e instanceof Error ? e.message : e,
       });
     }

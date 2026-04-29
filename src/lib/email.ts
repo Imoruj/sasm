@@ -48,9 +48,19 @@ function parseEmailAddress(raw: string | undefined): string {
   return match ? match[1] : raw.trim();
 }
 
-const FROM_ADDRESS = parseEmailAddress(
-  process.env.EMAIL_FROM ?? process.env.EMAIL_FROM_ADDRESS,
-);
+function getFromAddress(): string {
+  const raw = process.env.EMAIL_FROM ?? process.env.EMAIL_FROM_ADDRESS;
+  const parsed = parseEmailAddress(raw);
+
+  if (process.env.NODE_ENV === "production") {
+    // In production we must use a verified sender/domain.
+    if (!raw || parsed.endsWith("@localhost")) {
+      throw new Error("EMAIL_FROM (or EMAIL_FROM_ADDRESS) must be set to a verified sender in production");
+    }
+  }
+
+  return parsed;
+}
 
 // In dev/test, Resend only delivers to the verified account owner email.
 // Set RESEND_TEST_EMAIL to redirect all applicant emails there.
@@ -63,7 +73,7 @@ function toAddress(email: string): string {
 }
 
 function makeFrom(orgName: string) {
-  return `${orgName} <${FROM_ADDRESS}>`;
+  return `${orgName} <${getFromAddress()}>`;
 }
 
 function formatStudentName(studentName: string | null | undefined) {
