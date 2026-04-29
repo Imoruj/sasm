@@ -7,6 +7,7 @@ import PageHeader from "@/components/shared/PageHeader";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { formatDate } from "@/lib/utils";
 import { CLASS_LEVEL_CONFIG } from "@/constants/classLevels";
+import { Button } from "@/components/ui/button";
 
 export default async function AdminApplicationsPage({
   searchParams,
@@ -52,6 +53,11 @@ export default async function AdminApplicationsPage({
         title="Applications"
         description={`${total} total applications`}
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Applications" }]}
+        actions={
+          <Button asChild>
+            <Link href="/admin/applications/start">Start for Applicant</Link>
+          </Button>
+        }
       />
 
       {/* Status filter tabs */}

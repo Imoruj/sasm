@@ -16,6 +16,22 @@ export const requestRevisionSchema = z.object({
   adminNotes: z.string().max(1000).optional(),
 });
 
+export const startApplicationReviewSchema = z.object({
+  applicationId: z.string().uuid(),
+});
+
+export const startApplicationForApplicantSchema = z.object({
+  applicantEmail: z.string().email(),
+  templateId: z.string().uuid("A published application template is required"),
+  branchId: z.string().uuid().optional(),
+  admissionCycleId: z.string().uuid().optional(),
+  classApplied: z.enum([
+    "PRE_NURSERY", "NURSERY1", "NURSERY2", "NURSERY", "PRIMARY",
+    "BASIC1", "BASIC2", "BASIC3", "BASIC4", "BASIC5", "BASIC6",
+    "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3",
+  ]),
+});
+
 export const createExamSessionSchema = z.object({
   title: z.string().min(3).max(255),
   description: z.string().optional(),
@@ -33,4 +49,6 @@ export const createExamSessionSchema = z.object({
 export type ApproveApplicationInput = z.infer<typeof approveApplicationSchema>;
 export type RejectApplicationInput = z.infer<typeof rejectApplicationSchema>;
 export type RequestRevisionInput = z.infer<typeof requestRevisionSchema>;
+export type StartApplicationReviewInput = z.infer<typeof startApplicationReviewSchema>;
+export type StartApplicationForApplicantInput = z.infer<typeof startApplicationForApplicantSchema>;
 export type CreateExamSessionInput = z.infer<typeof createExamSessionSchema>;

@@ -11,13 +11,15 @@ export async function GET(req: Request) {
     if (!session?.user) {
       return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
     }
-    if (session.user.role !== "APPLICANT") {
-      return NextResponse.json(err("FORBIDDEN", "Only applicants can access application templates"), { status: 403 });
+    if (!["APPLICANT", "SCHOOL_ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
+      return NextResponse.json(err("FORBIDDEN", "Insufficient permissions"), { status: 403 });
     }
 
-    const organizationId = await resolveSessionOrganizationId(session.user.id, session.user.organizationId);
+    const organizationId = session.user.role === "APPLICANT"
+      ? await resolveSessionOrganizationId(session.user.id, session.user.organizationId)
+      : session.user.organizationId;
     if (!organizationId) {
-      return NextResponse.json(err("NOT_FOUND", "No school context found for this applicant"), { status: 404 });
+      return NextResponse.json(err("NOT_FOUND", "No school context found for this user"), { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);

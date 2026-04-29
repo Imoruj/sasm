@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, RotateCcw, Clock, CalendarDays, FileImage, ExternalLink, GraduationCap, CreditCard, UploadCloud } from "lucide-react";
+import { CheckCircle, XCircle, RotateCcw, Clock, CalendarDays, FileImage, ExternalLink, GraduationCap, CreditCard, UploadCloud, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,6 +51,9 @@ export default function ReviewActions({
   pendingAdmissionTransfer = null,
 }: ReviewActionsProps) {
   const router = useRouter();
+
+  // ── Start review state ─────────────────────────────────────────────────
+  const [startReviewLoading, setStartReviewLoading] = useState(false);
 
   // ── Enroll state ───────────────────────────────────────────────────────
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -120,7 +123,30 @@ export default function ReviewActions({
     }
   }
 
-  const anyLoading = approveLoading || rejectLoading || revisionLoading || enrollLoading || confirmTransferLoading;
+  const anyLoading =
+    approveLoading ||
+    rejectLoading ||
+    revisionLoading ||
+    enrollLoading ||
+    confirmTransferLoading ||
+    startReviewLoading;
+
+  async function handleStartReview() {
+    setStartReviewLoading(true);
+    try {
+      const res = await fetch(`/api/admin/applications/${applicationId}/start-review`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error?.message ?? "Failed to start review");
+      toast.success("Review started.");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start review.");
+    } finally {
+      setStartReviewLoading(false);
+    }
+  }
 
   // ── Handlers ───────────────────────────────────────────────────────────
   async function handleApprove() {
@@ -251,8 +277,27 @@ export default function ReviewActions({
           </div>
         )}
 
+        {/* ── SUBMITTED: start review ───────────────────────────────────── */}
+        {currentStatus === "SUBMITTED" && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              This application is awaiting review. Start review to move it into the under-review queue.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={handleStartReview}
+                disabled={anyLoading}
+                className="bg-[#1B4332] hover:bg-[#1B4332]/90 text-white"
+              >
+                <PlayCircle className="size-4 mr-2" />
+                {startReviewLoading ? "Starting…" : "Start Review"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Actionable states: SUBMITTED / UNDER_REVIEW ───────────────── */}
-        {canTakeAction && (
+        {canTakeAction && currentStatus === "UNDER_REVIEW" && (
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
               {currentStatus === "UNDER_REVIEW"
