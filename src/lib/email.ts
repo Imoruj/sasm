@@ -4,15 +4,46 @@ import { Resend } from "resend";
 // page-data collection when RESEND_API_KEY is not set in the build env.
 let _resend: Resend | null = null;
 function getResend(): Resend {
-  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  if (!_resend) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) throw new Error("RESEND_API_KEY is not set");
+    _resend = new Resend(apiKey);
+  }
   return _resend;
 }
 // Keep a top-level alias so all call sites stay unchanged (also exported for route files).
 export const resend = { emails: { send: (...args: Parameters<Resend["emails"]["send"]>) => getResend().emails.send(...args) } };
 
+type ResendSendResult = Awaited<ReturnType<Resend["emails"]["send"]>>;
+async function sendOrThrow(payload: Parameters<Resend["emails"]["send"]>[0]): Promise<ResendSendResult> {
+  const result = await resend.emails.send(payload);
+  // Resend SDK returns `{ data, error }` but may not throw.
+  // Use a runtime check to keep TS compatible across SDK versions.
+  const maybeError = (result as unknown as { error?: unknown }).error;
+  if (maybeError) {
+    const msg =
+      typeof maybeError === "string"
+        ? maybeError
+        : (maybeError as { message?: string }).message ?? "Email send failed";
+    throw new Error(msg);
+  }
+  return result;
+}
+
 // Support both EMAIL_FROM ("Name <addr@domain.com>") and EMAIL_FROM_ADDRESS ("addr@domain.com")
 function parseEmailAddress(raw: string | undefined): string {
-  if (!raw) return "noreply@localhost";
+  if (!raw) {
+    // Prefer a deterministic sender domain derived from NEXT_PUBLIC_APP_URL
+    // (Resend often rejects "noreply@localhost").
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    try {
+      const hostname = appUrl ? new URL(appUrl).hostname : null;
+      if (hostname) return `noreply@${hostname}`;
+    } catch {
+      // ignore
+    }
+    return "noreply@localhost";
+  }
   const match = raw.match(/<([^>]+)>/);
   return match ? match[1] : raw.trim();
 }
@@ -26,6 +57,8 @@ const FROM_ADDRESS = parseEmailAddress(
 const TEST_TO = process.env.RESEND_TEST_EMAIL;
 
 function toAddress(email: string): string {
+  // Never redirect in production.
+  if (process.env.NODE_ENV === "production") return email;
   return TEST_TO ?? email;
 }
 
@@ -43,7 +76,7 @@ function possessive(name: string) {
 }
 
 export async function sendOtpEmail(email: string, otp: string, firstName: string, orgName = "SAMS") {
-  return resend.emails.send({
+  return sendOrThrow({
     from: makeFrom(orgName),
     to: toAddress(email),
     subject: `Verify your ${orgName} account`,
@@ -61,7 +94,7 @@ export async function sendOtpEmail(email: string, otp: string, firstName: string
 }
 
 export async function sendPasswordResetEmail(email: string, otp: string, firstName: string, orgName = "SAMS") {
-  return resend.emails.send({
+  return sendOrThrow({
     from: makeFrom(orgName),
     to: toAddress(email),
     subject: `Reset your ${orgName} password`,

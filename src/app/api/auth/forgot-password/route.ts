@@ -38,8 +38,13 @@ export async function POST(req: Request) {
     try {
       const org = await db.organization.findFirst({ select: { name: true } });
       await sendPasswordResetEmail(email, otp, user.firstName, org?.name ?? "SAMS");
-    } catch {
-      // Don't fail silently in prod - but don't expose error to client
+    } catch (e) {
+      // Don't fail silently in prod, but don't expose internals to the client.
+      // We keep the same response shape to prevent email enumeration.
+      console.error("[FORGOT_PASSWORD] Failed sending reset email", {
+        email,
+        error: e instanceof Error ? e.message : e,
+      });
     }
 
     return NextResponse.json(ok({ sent: true }));
