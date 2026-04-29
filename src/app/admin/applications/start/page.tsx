@@ -35,6 +35,12 @@ export default function AdminStartApplicationPage() {
       });
       const json = await res.json();
 
+      if (!res.ok || !json?.success) {
+        setError(json?.error?.message ?? "Failed to find applicant application.");
+        setCreating(false);
+        return;
+      }
+
       if (res.ok && json?.success && json.data?.applicationId) {
         router.push(`/dashboard/applications/new?resume=${encodeURIComponent(json.data.applicationId)}&actingApplicantEmail=${encodeURIComponent(email)}`);
         return;

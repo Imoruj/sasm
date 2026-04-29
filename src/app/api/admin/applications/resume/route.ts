@@ -31,11 +31,14 @@ export async function POST(req: Request) {
     if (!orgId) return NextResponse.json(err("NOT_FOUND", "No organization context found"), { status: 404 });
 
     const applicant = await db.user.findFirst({
-      where: { email: parsed.data.applicantEmail, role: "APPLICANT", isActive: true, organizationId: orgId },
-      select: { id: true },
+      where: { email: parsed.data.applicantEmail, role: "APPLICANT", isActive: true },
+      select: { id: true, organizationId: true },
     });
     if (!applicant) {
       return NextResponse.json(err("NOT_FOUND", "Applicant account not found"), { status: 404 });
+    }
+    if (applicant.organizationId && applicant.organizationId !== orgId) {
+      return NextResponse.json(err("FORBIDDEN", "Applicant does not belong to this school"), { status: 403 });
     }
 
     const app = await db.application.findFirst({

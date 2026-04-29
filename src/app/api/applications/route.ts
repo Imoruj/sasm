@@ -123,13 +123,15 @@ export async function POST(req: Request) {
           email: actingApplicantEmail,
           role: "APPLICANT",
           isActive: true,
-          organizationId,
         },
-        select: { id: true },
+        select: { id: true, organizationId: true },
       });
 
       if (!actingApplicant) {
         return NextResponse.json(err("NOT_FOUND", "Applicant account not found"), { status: 404 });
+      }
+      if (actingApplicant.organizationId && actingApplicant.organizationId !== organizationId) {
+        return NextResponse.json(err("FORBIDDEN", "Applicant does not belong to this school"), { status: 403 });
       }
 
       applicantId = actingApplicant.id;
