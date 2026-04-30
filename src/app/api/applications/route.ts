@@ -137,6 +137,20 @@ export async function POST(req: Request) {
       applicantId = actingApplicant.id;
     }
 
+    // If a DRAFT already exists for this applicant + branch + cycle + class, resume it.
+    const existingDraft = await db.application.findFirst({
+      where: {
+        applicantId,
+        branchId: resolvedBranchId,
+        admissionCycleId: resolvedAdmissionCycle.id,
+        classApplied,
+        status: "DRAFT",
+      },
+    });
+    if (existingDraft) {
+      return NextResponse.json(ok(existingDraft), { status: 200 });
+    }
+
     // Count existing applications for this branch in the current year to build a sequential number
     const year = new Date().getFullYear();
     const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
@@ -148,9 +162,6 @@ export async function POST(req: Request) {
       branch.name,
       existingCount + 1,
     );
-
-    // No duplicate check — a parent/guardian may submit multiple applications
-    // for different children under the same account.
 
     const application = await db.application.create({
       data: {
