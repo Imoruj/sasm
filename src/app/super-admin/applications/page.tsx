@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import PageHeader from "@/components/shared/PageHeader";
 import StatusBadge from "@/components/shared/StatusBadge";
+import ApplicationRowActions from "@/components/shared/ApplicationRowActions";
 import { formatDate } from "@/lib/utils";
 import { CLASS_LEVEL_CONFIG } from "@/constants/classLevels";
 
@@ -122,6 +123,7 @@ export default async function SuperAdminApplicationsPage({
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Class</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Updated</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -146,6 +148,15 @@ export default async function SuperAdminApplicationsPage({
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={app.status} size="sm" /></td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(app.updatedAt)}</td>
+                    <td className="px-4 py-3">
+                      <ApplicationRowActions
+                        id={app.id}
+                        applicationNumber={app.applicationNumber}
+                        status={app.status}
+                        viewHref={`/admin/applications/${app.id}`}
+                        deleteEndpoint="/api/super-admin/applications"
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
