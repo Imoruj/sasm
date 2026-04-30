@@ -592,18 +592,23 @@ export default function NewApplicationPage() {
           form5.reset(fd.health);
         }
 
-        // Hobbies
-        if (fd.candidate?.hobbies) setHobbies(fd.candidate.hobbies as string);
+        // Hobbies / declaration
+        if (fd.hobbies) setHobbies(fd.hobbies as string);
+        else if (fd.candidate?.hobbies) setHobbies(fd.candidate.hobbies as string);
+        if (fd.declarationAccepted) setDeclarationAccepted(true);
         if (fd.placementTestType === "ONLINE" || fd.placementTestType === "ON_CAMPUS") {
           setPlacementTestType(fd.placementTestType as "ON_CAMPUS" | "ONLINE");
         }
 
-        // Determine resume step (first step with missing data, min 1)
+        // Determine resume step — advance to the last completed step + 1
         let resumeStep = 1;
-        if (app.studentFirstName)  resumeStep = 2;
-        if (fd.family)             resumeStep = 3;
-        if (fd.education)          resumeStep = 4;
-        if (fd.health)             resumeStep = 5;
+        if (app.studentFirstName)                                       resumeStep = 2;
+        if (fd.family)                                                  resumeStep = 3;
+        if (fd.education)                                               resumeStep = 4;
+        if (fd.health)                                                  resumeStep = 5;
+        if (fd.declarationAccepted || fd.hobbies !== undefined)         resumeStep = 6;
+        // If payment evidence already uploaded, stay on payment step (6)
+        if (app.paymentEvidenceUrl || app.status === "UNDER_REVIEW")    resumeStep = 6;
 
         setCurrentStep(resumeStep);
       } catch {
@@ -821,6 +826,8 @@ export default function NewApplicationPage() {
           formData: { enrollment: { branchName, studentType: data.studentType } },
         }),
       });
+      // Persist resume param in URL so a browser refresh returns to this draft
+      router.replace(`/dashboard/applications/new?resume=${id}${actingApplicantEmail ? `&actingApplicantEmail=${encodeURIComponent(actingApplicantEmail)}` : ""}`);
       moveToStep(1);
     } catch (e) {
       setCreateError((e as Error).message);
