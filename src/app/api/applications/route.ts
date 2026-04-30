@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createApplicationSchema } from "@/validators/applicationSchema";
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
     const [branch, org] = await Promise.all([
       db.branch.findFirst({
         where: { id: resolvedBranchId, organizationId: template.organizationId, isActive: true },
-        select: { organizationId: true, name: true },
+        select: { organizationId: true, name: true, code: true },
       }),
       db.organization.findUnique({
         where: { id: template.organizationId },
@@ -157,24 +158,40 @@ export async function POST(req: Request) {
     const existingCount = await db.application.count({
       where: { branchId: resolvedBranchId, createdAt: { gte: yearStart } },
     });
-    const applicationNumber = buildApplicationNumber(
-      org?.name ?? "SAMS",
-      branch.name,
-      existingCount + 1,
-    );
+    let application = null;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const applicationNumber = buildApplicationNumber(
+        org?.name ?? "SAMS",
+        branch.name,
+        existingCount + 1 + attempt,
+        branch.code,
+      );
 
-    const application = await db.application.create({
-      data: {
-        applicationNumber,
-        applicantId,
-        organizationId: branch.organizationId,
-        branchId: resolvedBranchId,
-        admissionCycleId: resolvedAdmissionCycle.id,
-        classApplied,
-        formTemplateId: template.id,
-        status: "DRAFT",
-      },
-    });
+      try {
+        application = await db.application.create({
+          data: {
+            applicationNumber,
+            applicantId,
+            organizationId: branch.organizationId,
+            branchId: resolvedBranchId,
+            admissionCycleId: resolvedAdmissionCycle.id,
+            classApplied,
+            formTemplateId: template.id,
+            status: "DRAFT",
+          },
+        });
+        break;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!application) {
+      return NextResponse.json(err("CONFLICT", "Could not generate a unique application number. Please try again."), { status: 409 });
+    }
 
     return NextResponse.json(ok(application), { status: 201 });
   } catch (error) {

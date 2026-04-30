@@ -29,29 +29,48 @@ export function formatDateTime(date: Date | string): string {
 }
 
 /** Extract initials from an organisation/branch name (e.g. "Trinitate International School" → "TIS") */
-export function nameInitials(name: string): string {
+export function nameInitials(name: string, maxLength = 6): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
     .map((w) => w[0].toUpperCase())
-    .join("");
+    .join("")
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, maxLength) || "SAMS";
+}
+
+function applicationBranchCode(branchName: string, branchCode?: string | null): string {
+  const codeParts = branchCode
+    ?.toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean);
+  const distinctiveCode = codeParts?.[codeParts.length - 1];
+  const rawCode = distinctiveCode && distinctiveCode.length > 2
+    ? distinctiveCode
+    : branchCode || nameInitials(branchName, 3);
+
+  return rawCode
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 3) || "BR";
 }
 
 /**
  * Build an application number in the format:
- *   {ORG_INITIALS}-{BRANCH_INITIAL}-{YEAR}-{NNNN}
- *   e.g. TIS-B-2026-0001
+ *   {ORG_INITIALS}-{BRANCH_CODE}-{YEAR}-{NNNN}
+ *   e.g. TIS-BOA-2026-0001
  */
 export function buildApplicationNumber(
   orgName: string,
   branchName: string,
   sequence: number,
+  branchCode?: string | null,
 ): string {
   const year = new Date().getFullYear();
-  const orgCode = nameInitials(orgName);
-  const branchCode = branchName.trim()[0].toUpperCase();
+  const orgCode = nameInitials(orgName, 6);
+  const normalizedBranchCode = applicationBranchCode(branchName, branchCode);
   const seq = String(sequence).padStart(4, "0");
-  return `${orgCode}-${branchCode}-${year}-${seq}`;
+  return `${orgCode}-${normalizedBranchCode}-${year}-${seq}`;
 }
 
 /** Convert Nigerian phone to E.164 format */
