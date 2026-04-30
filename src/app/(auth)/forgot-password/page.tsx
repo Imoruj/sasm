@@ -28,29 +28,12 @@ export default function ForgotPasswordPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    setSubmitted(true);
+    // Navigate directly to the code entry page — user doesn't need a second click
+    router.push(`/reset-password?email=${encodeURIComponent(data.email)}&sent=1`);
   };
 
   if (submitted) {
-    return (
-      <AuthLayout title="Check your email" description="">
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <p className="mb-6 text-sm text-gray-500">
-            We sent a reset code to <strong>{getValues("email")}</strong>. Check your inbox and spam folder.
-          </p>
-          <Button className="w-full bg-[#1B4332] hover:bg-[#2D6A4F]" asChild>
-            <Link href={`/reset-password?email=${encodeURIComponent(getValues("email"))}`}>
-              Enter reset code
-            </Link>
-          </Button>
-        </div>
-      </AuthLayout>
-    );
+    return null; // unreachable — router.push navigates away
   }
 
   return (

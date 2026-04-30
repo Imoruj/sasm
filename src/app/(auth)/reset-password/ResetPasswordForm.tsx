@@ -15,6 +15,7 @@ export default function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
+  const sent = searchParams.get("sent") === "1";
   const [serverError, setServerError] = useState("");
 
   const {
@@ -43,6 +44,12 @@ export default function ResetPasswordForm() {
 
   return (
     <AuthLayout title="Set new password" description="Enter your reset code and choose a new password">
+      {sent && email && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          We sent a 6-digit reset code to <strong>{email}</strong>. Check your inbox and spam folder.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
         {serverError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{serverError}</div>
