@@ -27,6 +27,8 @@ const connectSrc = [
   "https://api.resend.com",
   "https://api.ng.termii.com",
   "https://upstash.io",
+  // Allow Vercel deployment URLs so preview builds and auth callbacks work
+  "https://*.vercel.app",
   ...getStorageUploadOrigins(),
   "wss:",
 ].join(" ");
