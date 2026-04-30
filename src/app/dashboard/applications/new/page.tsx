@@ -256,6 +256,11 @@ function PaymentInvoiceStep({
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError("Only JPG, PNG, WEBP, or PDF files are accepted.");
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       setUploadError("File must be under 5MB");
       return;
@@ -265,19 +270,17 @@ function PaymentInvoiceStep({
     setUploadError(null);
 
     try {
-      // Get presigned URL
-      const res = await fetch(`/api/applications/${applicationId}/payment-evidence`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message ?? "Failed to get upload URL");
-      const { uploadUrl, publicUrl } = json.data as { uploadUrl: string; publicUrl: string };
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      uploadFormData.append("folder", `payment-evidence/${applicationId}`);
 
-      // Upload to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!uploadRes.ok) throw new Error("Upload failed");
+      const uploadRes = await fetch("/api/uploads", { method: "POST", body: uploadFormData });
+      const uploadJson = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) {
+        throw new Error(uploadJson?.error?.message ?? "Upload failed");
+      }
+      const publicUrl = uploadJson?.data?.publicUrl as string | undefined;
+      if (!publicUrl) throw new Error("Upload completed without a public URL");
 
       // Save evidence URL
       const saveRes = await fetch(`/api/applications/${applicationId}/payment-evidence`, {
@@ -285,7 +288,10 @@ function PaymentInvoiceStep({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ evidenceUrl: publicUrl }),
       });
-      if (!saveRes.ok) throw new Error("Failed to save evidence");
+      const saveJson = await saveRes.json().catch(() => null);
+      if (!saveRes.ok) {
+        throw new Error(saveJson?.error?.message ?? "Failed to save evidence");
+      }
 
       setEvidenceUrl(publicUrl);
       setUploadState("done");
@@ -441,7 +447,7 @@ function PaymentInvoiceStep({
                   <p className="text-sm font-medium text-gray-700">
                     {uploadState === "uploading" ? "Uploading…" : "Click to upload receipt"}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG or PDF · max 5MB</p>
+                  <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WEBP or PDF · max 5MB</p>
                 </div>
               </label>
               {uploadError && (

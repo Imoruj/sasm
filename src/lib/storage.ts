@@ -7,6 +7,7 @@ export const ALLOWED_MIME_TYPES = [
   "application/pdf",
   "image/jpeg",
   "image/png",
+  "image/webp",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 

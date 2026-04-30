@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return NextResponse.json(
-        err("VALIDATION_ERROR", "File type not allowed. Accepted: PDF, JPG, PNG, DOCX"),
+        err("VALIDATION_ERROR", "File type not allowed. Accepted: PDF, JPG, PNG, WEBP, DOCX"),
         { status: 415 },
       );
     }
