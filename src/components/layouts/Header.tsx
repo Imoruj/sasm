@@ -1,9 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { Bell, ChevronDown, LogOut, User, Menu } from "lucide-react";
+import { ChevronDown, LogOut, User, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import NotificationBell from "@/components/shared/NotificationBell";
 
 interface HeaderProps {
   userName: string;
@@ -48,16 +47,7 @@ export default function Header({ userName, userEmail, userAvatar, userRole, unre
 
       <div className="flex items-center gap-2">
         {/* Notifications */}
-        <Link href="/dashboard/notifications">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5 text-gray-600" />
-            {unreadCount > 0 && (
-              <Badge className="absolute -right-1 -top-1 h-4 w-4 items-center justify-center rounded-full bg-red-500 p-0 text-[10px] text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </Badge>
-            )}
-          </Button>
-        </Link>
+        <NotificationBell initialUnreadCount={unreadCount} />
 
         {/* User menu */}
         <DropdownMenu>
