@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Pencil, Printer, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { Eye, Pencil, Printer, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { toast } from "sonner";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { formatDate } from "@/lib/utils";
 import { CLASS_LEVEL_CONFIG } from "@/constants/classLevels";
@@ -41,11 +42,29 @@ const PAYMENT_BADGE: Record<string, { label: string; className: string }> = {
 type SortKey = "applicationNumber" | "studentName" | "branch" | "classApplied" | "updatedAt";
 type SortDir = "asc" | "desc";
 
-export default function ApplicationsTable({ applications }: { applications: Application[] }) {
+export default function ApplicationsTable({ applications: initialApps }: { applications: Application[] }) {
   const router = useRouter();
+  const [apps, setApps] = useState(initialApps);
   const [activeStatus, setActiveStatus] = useState<ApplicationStatus | "ALL">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(app: Application) {
+    if (!window.confirm(`Delete application ${app.applicationNumber}? This cannot be undone.`)) return;
+    setDeletingId(app.id);
+    try {
+      const res = await fetch(`/api/applications/${app.id}`, { method: "DELETE" });
+      const json = await res.json() as { success: boolean; error?: { message: string } };
+      if (!json.success) throw new Error(json.error?.message ?? "Delete failed");
+      setApps((prev) => prev.filter((a) => a.id !== app.id));
+      toast.success("Application deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete application");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -58,8 +77,8 @@ export default function ApplicationsTable({ applications }: { applications: Appl
 
   const filtered = useMemo(() => {
     const list = activeStatus === "ALL"
-      ? applications
-      : applications.filter((a) => a.status === activeStatus);
+      ? apps
+      : apps.filter((a) => a.status === activeStatus);
 
     return [...list].sort((a, b) => {
       let va: string, vb: string;
@@ -98,8 +117,8 @@ export default function ApplicationsTable({ applications }: { applications: Appl
         {STATUS_TABS.map((tab) => {
           const count =
             tab.value === "ALL"
-              ? applications.length
-              : applications.filter((a) => a.status === tab.value).length;
+              ? apps.length
+              : apps.filter((a) => a.status === tab.value).length;
           return (
             <button
               key={tab.value}
@@ -250,6 +269,23 @@ export default function ApplicationsTable({ applications }: { applications: Appl
                         >
                           <Printer className="size-4" />
                         </button>
+
+                        {/* Delete — only for DRAFT */}
+                        {app.status === "DRAFT" ? (
+                          <button
+                            type="button"
+                            title="Delete application"
+                            disabled={deletingId === app.id}
+                            onClick={() => handleDelete(app)}
+                            className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                          >
+                            {deletingId === app.id
+                              ? <span className="inline-block size-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+                              : <Trash2 className="size-4" />}
+                          </button>
+                        ) : (
+                          <span className="size-7" />
+                        )}
                       </div>
                     </td>
                   </tr>

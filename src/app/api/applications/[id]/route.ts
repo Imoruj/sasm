@@ -88,3 +88,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });
   }
 }
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json(err("UNAUTHORIZED", "Authentication required"), { status: 401 });
+
+    const { id } = await params;
+
+    const application = await db.application.findFirst({
+      where: { id, applicantId: session.user.id },
+      select: { id: true, applicationNumber: true, status: true },
+    });
+
+    if (!application) {
+      return NextResponse.json(err("NOT_FOUND", "Application not found"), { status: 404 });
+    }
+    if (application.status !== "DRAFT") {
+      return NextResponse.json(
+        err("FORBIDDEN", "Only draft applications can be deleted"),
+        { status: 403 },
+      );
+    }
+
+    await db.application.delete({ where: { id } });
+    return NextResponse.json(ok({ id }));
+  } catch (error) {
+    console.error("[DELETE_APPLICATION]", error);
+    return NextResponse.json(err("INTERNAL_ERROR", "Something went wrong."), { status: 500 });
+  }
+}
