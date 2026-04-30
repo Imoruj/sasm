@@ -80,9 +80,10 @@ export default function InvoiceClient({
       uploadFormData.append("folder", `payment-evidence/${applicationId}`);
 
       const uploadRes = await fetch("/api/uploads", { method: "POST", body: uploadFormData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const { data: uploadData } = await uploadRes.json();
-      const publicUrl = uploadData.publicUrl as string;
+      const uploadJson = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) throw new Error(uploadJson?.error?.message ?? "Upload failed");
+      const publicUrl = uploadJson?.data?.publicUrl as string | undefined;
+      if (!publicUrl) throw new Error("Upload completed without a public URL");
 
       // Save URL to application
       const patchRes = await fetch(`/api/applications/${applicationId}/payment-evidence`, {

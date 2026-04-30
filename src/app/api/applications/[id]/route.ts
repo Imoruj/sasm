@@ -57,7 +57,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         };
     const application = await db.application.findFirst({
       where: applicationWhere,
-      select: { id: true, status: true },
+      select: { id: true, status: true, formData: true },
     });
 
     if (!application) return NextResponse.json(err("NOT_FOUND", "Application not found"), { status: 404 });
@@ -72,12 +72,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const { formData, studentDob, ...rest } = validated.data;
+    // Merge incoming formData sections with existing — prevents later steps from wiping earlier ones
+    const existingFormData = (application.formData ?? {}) as Record<string, unknown>;
+    const mergedFormData = formData !== undefined
+      ? { ...existingFormData, ...formData }
+      : undefined;
+
     const updated = await db.application.update({
       where: { id },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: {
         ...rest,
-        ...(formData !== undefined ? { formData: formData as any } : {}),
+        ...(mergedFormData !== undefined ? { formData: mergedFormData as any } : {}),
         ...(studentDob !== undefined ? { studentDob: new Date(studentDob) } : {}),
       },
     });
