@@ -98,7 +98,7 @@ export default function ApplicationsTable({ applications: initialApps }: { appli
       }
       return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
     });
-  }, [applications, activeStatus, sortKey, sortDir]);
+  }, [apps, activeStatus, sortKey, sortDir]);
 
   function SortIcon({ col }: { col: SortKey }) {
     if (sortKey !== col) return <ChevronsUpDown className="ml-1 inline size-3.5 text-gray-300" />;
