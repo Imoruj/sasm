@@ -57,6 +57,8 @@ function HBar({
 // Page
 // ---------------------------------------------------------------------------
 
+export const dynamic = "force-dynamic";
+
 export default async function SuperAdminAnalyticsPage() {
   const session = await auth();
   const orgId = session!.user.organizationId ?? "";
@@ -65,8 +67,10 @@ export default async function SuperAdminAnalyticsPage() {
     statusGroups,
     branchStats,
     cycleStats,
-    paidPayments,
-    pendingPayments,
+    paystackRevenue,
+    paystackPending,
+    bankTransferConfirmed,
+    bankTransferPending,
     staffCount,
     applicantCount,
   ] = await Promise.all([
@@ -97,14 +101,38 @@ export default async function SuperAdminAnalyticsPage() {
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
+    // Paystack confirmed revenue
     db.payment.aggregate({
       where: { organizationId: orgId, status: "PAID" },
       _sum: { amountKobo: true },
       _count: { id: true },
     }),
+    // Paystack pending
     db.payment.count({ where: { organizationId: orgId, status: "PENDING" } }),
+    // Bank transfer confirmed (admin confirmed payment on application)
+    db.application.count({
+      where: {
+        organizationId: orgId,
+        paymentStatus: "PAID",
+        paymentConfirmedAt: { not: null },
+      },
+    }),
+    // Bank transfer evidence uploaded but awaiting confirmation
+    db.application.count({
+      where: {
+        organizationId: orgId,
+        paymentEvidenceUrl: { not: null },
+        paymentStatus: "PENDING",
+      },
+    }),
     db.user.count({ where: { organizationId: orgId, role: "SCHOOL_ADMIN" } }),
-    db.user.count({ where: { organizationId: orgId, role: "APPLICANT" } }),
+    // Applicants don't carry organizationId — count via their applications
+    db.user.count({
+      where: {
+        role: "APPLICANT",
+        applications: { some: { organizationId: orgId } },
+      },
+    }),
   ]);
 
   // Build status lookup
@@ -122,22 +150,26 @@ export default async function SuperAdminAnalyticsPage() {
     (byStatus["ENROLLED"] ?? 0);
 
   const admittedCount = (byStatus["ADMITTED"] ?? 0) + (byStatus["ENROLLED"] ?? 0);
-  const revenueKobo = paidPayments._sum.amountKobo ?? 0;
+  const revenueKobo = paystackRevenue._sum.amountKobo ?? 0;
+  const totalConfirmedPayments = paystackRevenue._count.id + bankTransferConfirmed;
+  const totalPendingPayments = paystackPending + bankTransferPending;
   const branchMax = Math.max(...branchStats.map((b) => b._count.applications), 1);
 
   const kpis = [
     {
       label: "Total Applications",
       value: totalApps.toLocaleString(),
-      sub: `${activeApps} submitted`,
+      sub: `${activeApps} active · ${byStatus["DRAFT"] ?? 0} draft`,
       icon: FileText,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
       label: "Revenue Collected",
-      value: formatNaira(revenueKobo),
-      sub: `${paidPayments._count.id} payments · ${pendingPayments} pending`,
+      value: revenueKobo > 0 ? formatNaira(revenueKobo) : `${totalConfirmedPayments} confirmed`,
+      sub: revenueKobo > 0
+        ? `${totalConfirmedPayments} payments · ${totalPendingPayments} pending`
+        : `${bankTransferConfirmed} bank transfer${bankTransferConfirmed !== 1 ? "s" : ""} · ${bankTransferPending} pending`,
       icon: Wallet,
       color: "text-green-600",
       bg: "bg-green-50",
@@ -184,7 +216,7 @@ export default async function SuperAdminAnalyticsPage() {
     },
     {
       label: "Pending Payments",
-      value: pendingPayments.toLocaleString(),
+      value: totalPendingPayments.toLocaleString(),
       sub: "awaiting confirmation",
       icon: Wallet,
       color: "text-orange-600",
