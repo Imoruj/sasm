@@ -61,12 +61,6 @@ export async function POST(req: Request) {
     });
 
     if (existing) {
-      if (existing.role !== "APPLICANT") {
-        return NextResponse.json(
-          err("FORBIDDEN", "This email belongs to a staff account and cannot be used for applicant applications."),
-          { status: 409 },
-        );
-      }
       // Account already exists — return it directly so the wizard can proceed
       return NextResponse.json(ok({ userId: existing.id, created: false }));
     }

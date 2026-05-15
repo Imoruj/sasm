@@ -122,7 +122,6 @@ export async function POST(req: Request) {
       const actingApplicant = await db.user.findFirst({
         where: {
           email: actingApplicantEmail,
-          role: "APPLICANT",
           isActive: true,
         },
         select: { id: true, organizationId: true },
