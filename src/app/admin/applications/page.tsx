@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { ApplicationStatus } from "@prisma/client";
 import Link from "next/link";
+import { FilePlus2, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import ApplicationsListClient from "./ApplicationsListClient";
@@ -57,9 +58,20 @@ export default async function AdminApplicationsPage({
         description={`${total} total application${total !== 1 ? "s" : ""}`}
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Applications" }]}
         actions={
-          <Button asChild>
-            <Link href="/admin/applications/start">Start for Applicant</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/applications/start?mode=resume">
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+                Resume Application
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/applications/start?mode=new">
+                <FilePlus2 className="h-4 w-4 mr-1.5" />
+                New Application
+              </Link>
+            </Button>
+          </div>
         }
       />
 
