@@ -448,6 +448,66 @@ export async function sendEnrollmentConfirmationEmail(
   });
 }
 
+export async function sendApplicantWelcomeEmail(
+  email: string,
+  firstName: string,
+  temporaryPassword: string,
+  organizationName: string,
+) {
+  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/login`;
+
+  return resend.emails.send({
+    from: makeFrom(organizationName),
+    to: toAddress(email),
+    subject: `Your ${organizationName} Applicant Account`,
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;color:#111827;">
+        <div style="background:#1B4332;padding:28px 32px;border-radius:12px 12px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">${organizationName}</h1>
+          <p style="color:#a7f3d0;margin:4px 0 0;font-size:14px;">Applicant Portal Access</p>
+        </div>
+        <div style="background:#ffffff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+          <p style="font-size:16px;margin-top:0;">Dear <strong>${firstName}</strong>,</p>
+          <p style="color:#374151;">
+            An account has been created for you on the ${organizationName} Admission Portal.
+            Use the credentials below to log in and track your application.
+          </p>
+
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:24px 0;">
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr>
+                <td style="color:#6b7280;padding:6px 0;width:130px;">Email</td>
+                <td style="font-weight:600;padding:6px 0;">${email}</td>
+              </tr>
+              <tr>
+                <td style="color:#6b7280;padding:6px 0;vertical-align:top;">Password</td>
+                <td style="padding:6px 0;">
+                  <span style="font-family:monospace;background:#1B4332;color:#fff;padding:4px 12px;border-radius:4px;font-size:16px;letter-spacing:2px;">${temporaryPassword}</span>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="color:#dc2626;font-size:13px;font-weight:600;">
+            Please change your password after your first login for security.
+          </p>
+
+          <a href="${loginUrl}"
+             style="display:inline-block;background:#1B4332;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;margin-top:8px;">
+            Log In to Applicant Portal &rarr;
+          </a>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px;" />
+          <p style="color:#9ca3af;font-size:12px;margin:0;">
+            This account was created on your behalf by ${organizationName} admissions staff.
+            If you did not expect this, please contact the school directly.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendApplicationStatusEmail(
   email: string,
   firstName: string,
