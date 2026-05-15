@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Eye, Trash2, Search, X } from "lucide-react";
+import { Eye, Trash2, Search, X, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -196,6 +196,21 @@ export default function ApplicationsListClient({
                             <Eye className="h-3.5 w-3.5" />
                           </Link>
                         </Button>
+                        {["DRAFT", "REVISION_REQUIRED"].includes(app.status) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600"
+                            title="Continue application"
+                            asChild
+                          >
+                            <Link
+                              href={`/dashboard/applications/new?resume=${app.id}&actingApplicantEmail=${encodeURIComponent(app.applicant.email)}`}
+                            >
+                              <PencilLine className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
