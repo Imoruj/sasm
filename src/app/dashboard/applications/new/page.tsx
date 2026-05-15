@@ -813,7 +813,13 @@ export default function NewApplicationPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message ?? "Failed to create draft");
+      if (!res.ok) {
+        const message = json.error?.message ?? "Failed to create draft";
+        if (actingApplicantEmail && (json.error?.code === "NOT_FOUND" || message.toLowerCase().includes("not found"))) {
+          throw new Error("Applicant account not found. Please go back and use 'New Application' to set up the applicant account before opening the wizard.");
+        }
+        throw new Error(message);
+      }
       const id = json.data.id as string;
       setApplicationId(id);
       setApplicationNumber((json.data.applicationNumber as string) ?? "");
