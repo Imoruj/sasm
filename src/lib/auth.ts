@@ -80,7 +80,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user || !user.passwordHash) return null;
         if (!user.isActive) return null;
-        if (!user.emailVerified) return null;
 
         // Account lockout check
         if (user.lockedUntil && user.lockedUntil > new Date()) {

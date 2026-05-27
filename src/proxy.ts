@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { canAccessAdminPath } from "@/lib/staffAccess";
 import type { StaffPermissions } from "@/lib/staffAccess";
 
-const AUTH_ROUTES = ["/login", "/register", "/verify", "/forgot-password", "/reset-password"];
+const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 export default auth((req: NextRequest & { auth: { user?: { role?: string; permissions?: StaffPermissions; branchId?: string | null } } | null }) => {
   const { pathname } = req.nextUrl;

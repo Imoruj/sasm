@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,11 @@ import { Label } from "@/components/ui/label";
 import AuthLayout from "@/components/layouts/AuthLayout";
 import { loginSchema, type LoginInput } from "@/validators/authSchema";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registered = searchParams.get("registered") === "1";
+  const prefilledEmail = searchParams.get("email") ?? "";
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
 
@@ -22,7 +25,10 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
+  } = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: prefilledEmail },
+  });
 
   const onSubmit = async (data: LoginInput) => {
     setServerError("");
@@ -44,6 +50,11 @@ export default function LoginPage() {
   return (
     <AuthLayout title="Welcome back" description="Sign in to your SAMS account">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" suppressHydrationWarning>
+        {registered && (
+          <div className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            Account created successfully. Sign in with your email and password to continue.
+          </div>
+        )}
         {serverError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{serverError}</div>
         )}
@@ -95,5 +106,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthLayout>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

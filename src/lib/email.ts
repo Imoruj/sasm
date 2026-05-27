@@ -85,24 +85,6 @@ function possessive(name: string) {
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
 }
 
-export async function sendOtpEmail(email: string, otp: string, firstName: string, orgName = "SAMS") {
-  return sendOrThrow({
-    from: makeFrom(orgName),
-    to: toAddress(email),
-    subject: `Verify your ${orgName} account`,
-    html: `
-      <div style="font-family: Inter, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #1B4332;">Welcome to ${orgName}, ${firstName}!</h2>
-        <p>Your verification code is:</p>
-        <div style="background: #f3f4f6; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
-          <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1B4332;">${otp}</span>
-        </div>
-        <p style="color: #6b7280; font-size: 14px;">This code expires in 15 minutes. Do not share it with anyone.</p>
-      </div>
-    `,
-  });
-}
-
 export async function sendPasswordResetEmail(email: string, otp: string, firstName: string, orgName = "SAMS") {
   return sendOrThrow({
     from: makeFrom(orgName),

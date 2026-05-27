@@ -3,13 +3,8 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { registerSchema } from "@/validators/authSchema";
 import { ok, err } from "@/types/api";
-import { sendOtpEmail } from "@/lib/email";
 import { normalizeNigerianPhone } from "@/lib/utils";
 import { authLimiter } from "@/lib/ratelimit";
-
-function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 export async function POST(req: Request) {
   try {
@@ -57,23 +52,9 @@ export async function POST(req: Request) {
         passwordHash,
         phone: normalizedPhone,
         role: "APPLICANT",
+        emailVerified: true,
       },
     });
-
-    // Create OTP
-    const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await db.verificationToken.create({
-      data: { email, token: otp, type: "email_verify", expiresAt },
-    });
-
-    // Send verification email
-    try {
-      const org = await db.organization.findFirst({ select: { name: true } });
-      await sendOtpEmail(email, otp, firstName, org?.name ?? "SAMS");
-    } catch {
-      // Don't fail registration if email fails
-    }
 
     return NextResponse.json(ok({ id: user.id, email: user.email }), { status: 201 });
   } catch (error) {
