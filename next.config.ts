@@ -73,6 +73,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/verify",
+        destination: "/login",
+        permanent: true,
+      },
+      {
         // Redirect the stable Vercel project subdomain to the canonical domain
         source: "/:path*",
         has: [{ type: "host", value: "sams-josephs-projects-d429a6bf.vercel.app" }],
