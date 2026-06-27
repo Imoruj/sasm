@@ -516,3 +516,42 @@ export async function sendApplicationStatusEmail(
     `,
   });
 }
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export async function sendApplicantMessageEmail(
+  email: string,
+  firstName: string,
+  subject: string,
+  message: string,
+  orgName = "School",
+) {
+  const safeMessage = escapeHtml(message).replace(/\r?\n/g, "<br />");
+
+  return sendOrThrow({
+    from: makeFrom(orgName),
+    to: toAddress(email),
+    subject,
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;color:#111827;">
+        <div style="background:#1B4332;padding:28px 32px;border-radius:12px 12px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">${escapeHtml(orgName)}</h1>
+          <p style="color:#a7f3d0;margin:4px 0 0;font-size:14px;">Admissions Office</p>
+        </div>
+        <div style="background:#ffffff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+          <p style="font-size:16px;margin-top:0;">Dear <strong>${escapeHtml(firstName)}</strong>,</p>
+          <p style="color:#374151;line-height:1.7;">${safeMessage}</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px;" />
+          <p style="color:#9ca3af;font-size:12px;margin:0;">This email was sent by ${escapeHtml(orgName)}.</p>
+        </div>
+      </div>
+    `,
+  });
+}

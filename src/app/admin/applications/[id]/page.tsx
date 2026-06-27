@@ -12,11 +12,12 @@ import { CLASS_LEVEL_CONFIG } from "@/constants/classLevels";
 import { formatDate, formatDateTime, formatNaira, formatFileSize } from "@/lib/utils";
 import {
   ExternalLink, CheckCircle, Clock, FileText, Calendar, CreditCard,
-  User, Building2, GraduationCap, Heart, Phone, Mail, MapPin,
+  User, Building2, GraduationCap, Heart,
   FileImage, AlertCircle, Hash,
 } from "lucide-react";
 import ReviewActions from "./ReviewActions";
 import DocumentReviewCard from "./DocumentReviewCard";
+import ApplicationContactTabs from "./ApplicationContactTabs";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -332,46 +333,17 @@ export default async function AdminApplicationDetailPage({
         <div className="space-y-5">
           <div className="lg:sticky lg:top-6 space-y-5">
 
-            {/* Applicant contact */}
-            <Card>
-              <CardHeader className="border-b pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Phone className="size-4 text-gray-400" />
-                  Applicant Contact
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-3 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1B4332]/10 text-sm font-bold text-[#1B4332]">
-                    {[applicant.firstName?.[0], applicant.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?"}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {[applicant.firstName, applicant.lastName].filter(Boolean).join(" ")}
-                    </p>
-                    <p className="text-xs text-gray-500">{profile?.guardianTitle ?? "Parent/Guardian"}</p>
-                  </div>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Mail className="size-3.5 text-gray-400 shrink-0" />
-                    <a href={`mailto:${applicant.email}`} className="hover:text-primary truncate">{applicant.email}</a>
-                  </div>
-                  {applicant.phone && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Phone className="size-3.5 text-gray-400 shrink-0" />
-                      <span>{applicant.phone}</span>
-                    </div>
-                  )}
-                  {profile?.residentialAddress && (
-                    <div className="flex items-start gap-2 text-gray-600">
-                      <MapPin className="size-3.5 text-gray-400 shrink-0 mt-0.5" />
-                      <span className="text-xs">{profile.residentialAddress}</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <ApplicationContactTabs
+              applicationId={application.id}
+              applicantName={[applicant.firstName, applicant.lastName].filter(Boolean).join(" ")}
+              applicantEmail={applicant.email}
+              applicantPhone={applicant.phone}
+              guardianTitle={profile?.guardianTitle}
+              residentialAddress={profile?.residentialAddress}
+              studentName={studentName}
+              schoolName={application.branch.name}
+              classApplied={classConfig?.label ?? "the selected class"}
+            />
 
             {/* Payment evidence */}
             {application.paymentEvidenceUrl && (
