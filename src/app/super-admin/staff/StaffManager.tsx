@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  MoreHorizontal,
   Plus,
   Search,
   Eye,
@@ -29,7 +28,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -41,14 +39,6 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectTrigger,
@@ -73,6 +63,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatDateTime } from "@/lib/utils";
+import { getDefaultStaffPassword } from "@/constants/staff";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,18 +146,6 @@ const staffFormSchema = z
 
 type StaffFormValues = z.infer<typeof staffFormSchema>;
 
-const resetPasswordSchema = z
-  .object({
-    newPassword: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(1, "Please confirm the password"),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
-
 // ---------------------------------------------------------------------------
 // StaffAvatar helper
 // ---------------------------------------------------------------------------
@@ -244,12 +223,14 @@ export default function StaffManager({
 
   // Dialog states
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Currently selected staff for actions
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
+  const [viewingStaff, setViewingStaff] = useState<StaffUser | null>(null);
   const [actionTarget, setActionTarget] = useState<StaffUser | null>(null);
 
   // Loading states
@@ -257,8 +238,6 @@ export default function StaffManager({
 
   // Password visibility
   const [showTempPassword, setShowTempPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Permissions state (for School Admin)
   const defaultPermissions: StaffPermissions = {
@@ -433,41 +412,44 @@ export default function StaffManager({
   };
 
   // ---------------------------------------------------------------------------
-  // Reset password form
+  // View account
   // ---------------------------------------------------------------------------
 
-  const {
-    register: registerReset,
-    handleSubmit: handleResetSubmit,
-    reset: resetPasswordForm,
-    formState: { errors: resetErrors },
-  } = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
-  });
+  const openViewDialog = (member: StaffUser) => {
+    setViewingStaff(member);
+    setIsViewDialogOpen(true);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Reset password to default
+  // ---------------------------------------------------------------------------
 
   const openResetDialog = (member: StaffUser) => {
     setActionTarget(member);
-    resetPasswordForm({ newPassword: "", confirmPassword: "" });
-    setShowNewPassword(false);
-    setShowConfirmPassword(false);
     setIsResetDialogOpen(true);
   };
 
-  const onResetSubmit = async (data: ResetPasswordValues) => {
+  const onResetToDefault = async () => {
     if (!actionTarget) return;
     setIsSubmitting(true);
     try {
       const res = await fetch(`/api/super-admin/staff/${actionTarget.id}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword: data.newPassword }),
+        body: JSON.stringify({ useDefault: true }),
       });
       const json = await res.json();
       if (!json.success) {
         toast.error(json.error?.message ?? "Failed to reset password");
         return;
       }
-      toast.success(`Password reset for ${actionTarget.firstName} ${actionTarget.lastName}`);
+      const defaultPw =
+        json.data?.defaultPassword ??
+        getDefaultStaffPassword(actionTarget.role);
+      toast.success(
+        `Password for ${actionTarget.firstName} ${actionTarget.lastName} reset to default (${defaultPw}). They’ve been emailed the new credentials.`,
+        { duration: 8000 },
+      );
       setIsResetDialogOpen(false);
     } catch {
       toast.error("An unexpected error occurred");
@@ -650,7 +632,7 @@ export default function StaffManager({
                   <TableHead>Status</TableHead>
                   <TableHead>Access</TableHead>
                   <TableHead>Last Login</TableHead>
-                  <TableHead className="w-10" />
+                  <TableHead className="w-[160px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -729,64 +711,122 @@ export default function StaffManager({
                         </span>
                       </TableCell>
 
-                      {/* Actions */}
+                      {/* Actions: View / Edit / Reset / Delete */}
                       <TableCell>
-                        {isSelf ? (
+                        <div className="flex items-center justify-end gap-0.5">
                           <Tooltip>
                             <TooltipTrigger
-                              render={<Button variant="ghost" size="icon-sm" disabled aria-label="Cannot modify your own account" />}
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="View account"
+                                  onClick={() => openViewDialog(member)}
+                                />
+                              }
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </TooltipTrigger>
-                            <TooltipContent side="left">
-                              Cannot modify your own account
-                            </TooltipContent>
+                            <TooltipContent side="top">View</TooltipContent>
                           </Tooltip>
-                        ) : (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={<Button variant="ghost" size="icon-sm" aria-label="Open actions menu" />}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => openEditDialog(member)}>
+
+                          {isSelf ? (
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    disabled
+                                    aria-label="Cannot modify your own account"
+                                  />
+                                }
+                              >
                                 <Pencil className="h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openResetDialog(member)}>
-                                <KeyRound className="h-4 w-4" />
-                                Reset Password
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant={member.isActive ? "destructive" : "default"}
-                                onClick={() => openDeactivateDialog(member)}
-                              >
-                                {member.isActive ? (
-                                  <>
-                                    <UserX className="h-4 w-4" />
-                                    Deactivate
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserCheck className="h-4 w-4" />
-                                    Reactivate
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => openDeleteDialog(member)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete User
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                Cannot modify your own account
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label="Edit account"
+                                      onClick={() => openEditDialog(member)}
+                                    />
+                                  }
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Edit</TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label="Reset password to default"
+                                      onClick={() => openResetDialog(member)}
+                                    />
+                                  }
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  Reset password to default
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label={
+                                        member.isActive ? "Deactivate account" : "Reactivate account"
+                                      }
+                                      onClick={() => openDeactivateDialog(member)}
+                                    />
+                                  }
+                                >
+                                  {member.isActive ? (
+                                    <UserX className="h-4 w-4 text-amber-600" />
+                                  ) : (
+                                    <UserCheck className="h-4 w-4 text-green-600" />
+                                  )}
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  {member.isActive ? "Deactivate" : "Reactivate"}
+                                </TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label="Delete account"
+                                      onClick={() => openDeleteDialog(member)}
+                                      className="text-destructive hover:text-destructive"
+                                    />
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Delete</TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -1069,107 +1109,157 @@ export default function StaffManager({
       </Dialog>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Reset Password Dialog                                               */}
+      {/* View Account Dialog                                                 */}
       {/* ------------------------------------------------------------------ */}
-      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
+            <DialogTitle>View User Account</DialogTitle>
           </DialogHeader>
 
-          {actionTarget && (
-            <p className="text-sm text-muted-foreground">
-              Reset password for{" "}
-              <span className="font-medium text-foreground">
-                {actionTarget.firstName} {actionTarget.lastName}
-              </span>
-              .
-            </p>
+          {viewingStaff && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3">
+                <StaffAvatar
+                  firstName={viewingStaff.firstName}
+                  lastName={viewingStaff.lastName}
+                />
+                <div>
+                  <p className="text-base font-semibold text-foreground">
+                    {viewingStaff.firstName} {viewingStaff.lastName}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{viewingStaff.email}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-gray-50 p-4">
+                <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-2.5 text-sm">
+                  <dt className="text-muted-foreground">Role</dt>
+                  <dd><RoleBadge role={viewingStaff.role} /></dd>
+
+                  <dt className="text-muted-foreground">Branch</dt>
+                  <dd className="font-medium">
+                    {viewingStaff.branch
+                      ? `${viewingStaff.branch.name} (${viewingStaff.branch.code})`
+                      : viewingStaff.role === "SUPER_ADMIN"
+                        ? "All Branches"
+                        : "—"}
+                  </dd>
+
+                  <dt className="text-muted-foreground">Status</dt>
+                  <dd><StatusDot isActive={viewingStaff.isActive} /></dd>
+
+                  <dt className="text-muted-foreground">Phone</dt>
+                  <dd className="font-medium">{viewingStaff.phone ?? "—"}</dd>
+
+                  <dt className="text-muted-foreground">Email verified</dt>
+                  <dd className="font-medium">{viewingStaff.emailVerified ? "Yes" : "No"}</dd>
+
+                  <dt className="text-muted-foreground">Last login</dt>
+                  <dd className="font-medium">
+                    {viewingStaff.lastLoginAt
+                      ? formatDateTime(viewingStaff.lastLoginAt)
+                      : "Never"}
+                  </dd>
+
+                  <dt className="text-muted-foreground">Created</dt>
+                  <dd className="font-medium">{formatDateTime(viewingStaff.createdAt)}</dd>
+
+                  <dt className="text-muted-foreground">Access</dt>
+                  <dd>
+                    {viewingStaff.role === "SUPER_ADMIN" ? (
+                      <span className="text-sm">Full access</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {PERMISSION_DEFS.filter(
+                          ({ key }) => viewingStaff.permissions?.[key as PermissionKey],
+                        ).map(({ key, label }) => (
+                          <span
+                            key={key}
+                            className="inline-flex items-center rounded-full bg-[#1B4332]/10 text-[#1B4332] px-2 py-0.5 text-[10px] font-medium"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                        {!PERMISSION_DEFS.some(
+                          ({ key }) => viewingStaff.permissions?.[key as PermissionKey],
+                        ) && (
+                          <span className="text-xs text-muted-foreground">No access</span>
+                        )}
+                      </div>
+                    )}
+                  </dd>
+                </dl>
+              </div>
+
+              {viewingStaff.id !== currentUserId && (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openEditDialog(viewingStaff);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    className="bg-[#1B4332] hover:bg-[#1B4332]/90"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openResetDialog(viewingStaff);
+                    }}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    Reset Password
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
-
-          <form onSubmit={handleResetSubmit(onResetSubmit)} className="space-y-4">
-            {/* New Password */}
-            <div className="space-y-1">
-              <Label htmlFor="newPassword">
-                New Password <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  id="newPassword"
-                  type={showNewPassword ? "text" : "password"}
-                  placeholder="Min 8 characters"
-                  {...registerReset("newPassword")}
-                  aria-invalid={!!resetErrors.newPassword}
-                  className="pr-9"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword((p) => !p)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                  aria-label={showNewPassword ? "Hide password" : "Show password"}
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              {resetErrors.newPassword && (
-                <p className="text-xs text-destructive">
-                  {resetErrors.newPassword.message}
-                </p>
-              )}
-            </div>
-
-            {/* Confirm Password */}
-            <div className="space-y-1">
-              <Label htmlFor="confirmPassword">
-                Confirm Password <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Repeat password"
-                  {...registerReset("confirmPassword")}
-                  aria-invalid={!!resetErrors.confirmPassword}
-                  className="pr-9"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((p) => !p)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              {resetErrors.confirmPassword && (
-                <p className="text-xs text-destructive">
-                  {resetErrors.confirmPassword.message}
-                </p>
-              )}
-            </div>
-
-            <DialogFooter showCloseButton>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-[#1B4332] hover:bg-[#1B4332]/90"
-              >
-                {isSubmitting ? "Resetting..." : "Reset Password"}
-              </Button>
-            </DialogFooter>
-          </form>
         </DialogContent>
       </Dialog>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Reset Password to Default Confirmation                              */}
+      {/* ------------------------------------------------------------------ */}
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password to Default?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionTarget && (
+                <>
+                  This will reset the password for{" "}
+                  <strong>
+                    {actionTarget.firstName} {actionTarget.lastName}
+                  </strong>{" "}
+                  to the default{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">
+                    {getDefaultStaffPassword(actionTarget.role)}
+                  </code>
+                  . They will receive an email with the new credentials, and any
+                  account lockout will be cleared.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSubmitting}
+              onClick={(e) => {
+                e.preventDefault();
+                void onResetToDefault();
+              }}
+              className="bg-[#1B4332] hover:bg-[#1B4332]/90"
+            >
+              {isSubmitting ? "Resetting..." : "Reset to Default"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ------------------------------------------------------------------ */}
       {/* Deactivate / Activate Confirmation Dialog                           */}

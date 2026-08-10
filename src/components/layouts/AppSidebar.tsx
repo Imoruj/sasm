@@ -62,6 +62,7 @@ const SUPER_ADMIN_NAV: NavItem[] = [
   { label: "Dashboard",       href: "/super-admin",                   icon: LayoutDashboard },
   { label: "Branches",        href: "/super-admin/branches",          icon: Building2 },
   { label: "Staff",           href: "/super-admin/staff",             icon: Users },
+  { label: "Users",           href: "/super-admin/users",             icon: UserCircle },
   { label: "Applications",    href: "/super-admin/applications",      icon: ClipboardList },
   { label: "Form Templates",  href: "/super-admin/forms",             icon: Layers },
   { label: "Admission Cycles",href: "/super-admin/cycles",            icon: BookOpen },

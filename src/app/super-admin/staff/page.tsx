@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import PageHeader from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
+import { normalizeStaffPermissions } from "@/lib/staffAccess";
 import StaffManager from "./StaffManager";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function StaffPage() {
       where: {
         organizationId: orgId,
         role: { in: ["SCHOOL_ADMIN", "SUPER_ADMIN"] },
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -34,6 +36,7 @@ export default async function StaffPage() {
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
+        permissions: true,
         branch: {
           select: {
             name: true,
@@ -60,10 +63,10 @@ export default async function StaffPage() {
     <div>
       <PageHeader
         title="Staff Management"
-        description="Manage school admins and super admins for your organization"
+        description={`${totalStaff} staff account${totalStaff !== 1 ? "s" : ""} across all branches`}
         breadcrumbs={[
           { label: "Super Admin", href: "/super-admin" },
-          { label: "Staff Management" },
+          { label: "Staff" },
         ]}
       />
 
@@ -105,7 +108,7 @@ export default async function StaffPage() {
           role: s.role as "SCHOOL_ADMIN" | "SUPER_ADMIN",
           lastLoginAt: s.lastLoginAt ? s.lastLoginAt.toISOString() : null,
           createdAt: s.createdAt.toISOString(),
-          permissions: {},
+          permissions: normalizeStaffPermissions(s.permissions),
         }))}
         branches={branches}
         total={totalStaff}

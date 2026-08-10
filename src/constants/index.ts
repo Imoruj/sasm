@@ -2,6 +2,7 @@ export * from "./nigeria";
 export * from "./classLevels";
 export * from "./grading";
 export * from "./statuses";
+export * from "./staff";
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 export const ACCEPTED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];

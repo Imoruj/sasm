@@ -182,7 +182,7 @@ export async function sendStaffPasswordResetNotification(
         </div>
         <div style="background:#ffffff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
           <p style="font-size:16px;margin-top:0;">Hi <strong>${firstName}</strong>,</p>
-          <p style="color:#374151;">Your admin account password has been reset by a super administrator. Use the credentials below to log in.</p>
+          <p style="color:#374151;">Your account password has been reset by a super administrator. Use the credentials below to log in.</p>
 
           <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:24px 0;">
             <table style="width:100%;border-collapse:collapse;font-size:14px;">
