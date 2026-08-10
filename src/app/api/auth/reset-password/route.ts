@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     const passwordHash = await bcrypt.hash(password, 12);
     await Promise.all([
       db.verificationToken.update({ where: { id: token.id }, data: { usedAt: new Date() } }),
-      db.user.update({ where: { email }, data: { passwordHash } }),
+      db.user.update({
+        where: { email },
+        data: { passwordHash, mustChangePassword: false },
+      }),
     ]);
 
     return NextResponse.json(ok({ reset: true }));

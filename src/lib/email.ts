@@ -195,7 +195,7 @@ export async function sendStaffPasswordResetNotification(
             </table>
           </div>
 
-          <p style="color:#6b7280;font-size:13px;">Please change your password after logging in.</p>
+          <p style="color:#6b7280;font-size:13px;">You will be asked to set a new password after you log in with this temporary password.</p>
 
           <a href="${loginUrl}"
              style="display:inline-block;background:#1B4332;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;margin-top:8px;">

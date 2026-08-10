@@ -140,6 +140,7 @@ export async function POST(req: Request) {
           branchId: branchId ?? null,
           emailVerified: true, // Admin-created accounts are pre-verified
           isActive: true,
+          mustChangePassword: true,
           permissions: permissions ? (permissions as never) : undefined,
         },
         select: {

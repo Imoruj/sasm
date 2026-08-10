@@ -25,6 +25,7 @@ async function loadFreshSessionUser(userId: string) {
       organizationId: true,
       branchId: true,
       isActive: true,
+      mustChangePassword: true,
       updatedAt: true,
       permissions: true,
     },
@@ -42,6 +43,7 @@ async function loadFreshSessionUser(userId: string) {
     branchId: user.branchId,
     permissions: normalizeStaffPermissions(user.permissions),
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
     updatedAt: user.updatedAt.toISOString(),
   };
 }
@@ -120,6 +122,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           organizationId: user.organizationId,
           branchId: user.branchId,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -133,6 +136,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.branchId = (user as { branchId: string | null }).branchId;
         token.name = user.name;
         token.email = user.email;
+        token.mustChangePassword =
+          (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
       }
 
       // Refresh token from DB on explicit update trigger or periodically (every 5 min)
@@ -152,6 +157,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.picture = freshUser.image;
           token.permissions = freshUser.permissions;
           token.isActive = freshUser.isActive;
+          token.mustChangePassword = freshUser.mustChangePassword;
           token.updatedAt = new Date().toISOString();
         }
       }
@@ -175,6 +181,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.branchId = freshUser.branchId;
           session.user.permissions = freshUser.permissions;
           session.user.isActive = freshUser.isActive;
+          session.user.mustChangePassword = freshUser.mustChangePassword;
           session.user.updatedAt = freshUser.updatedAt;
           return session;
         }
@@ -188,6 +195,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.branchId = token.branchId as string | null;
       session.user.permissions = normalizeStaffPermissions((token as { permissions?: unknown }).permissions);
       session.user.isActive = (token as { isActive?: boolean }).isActive ?? true;
+      session.user.mustChangePassword =
+        (token as { mustChangePassword?: boolean }).mustChangePassword ?? false;
       session.user.updatedAt = (token as { updatedAt?: string }).updatedAt ?? new Date(0).toISOString();
 
       return session;

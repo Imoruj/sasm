@@ -43,6 +43,21 @@ function LoginForm() {
       return;
     }
 
+    // Prefer force-change page when password was reset to default; proxy also enforces this
+    try {
+      const sessionRes = await fetch("/api/auth/session");
+      const sessionJson = (await sessionRes.json()) as {
+        user?: { mustChangePassword?: boolean };
+      };
+      if (sessionJson?.user?.mustChangePassword) {
+        router.push("/change-password");
+        router.refresh();
+        return;
+      }
+    } catch {
+      // Fall through to default redirect; proxy will catch if needed
+    }
+
     router.push("/dashboard");
     router.refresh();
   };

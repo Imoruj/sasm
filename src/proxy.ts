@@ -5,13 +5,44 @@ import { canAccessAdminPath } from "@/lib/staffAccess";
 import type { StaffPermissions } from "@/lib/staffAccess";
 
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/reset-password"];
+const FORCE_CHANGE_PASSWORD_PATH = "/change-password";
 
-export default auth((req: NextRequest & { auth: { user?: { role?: string; permissions?: StaffPermissions; branchId?: string | null } } | null }) => {
+type ProxySessionUser = {
+  role?: string;
+  permissions?: StaffPermissions;
+  branchId?: string | null;
+  mustChangePassword?: boolean;
+};
+
+export default auth((req: NextRequest & { auth: { user?: ProxySessionUser } | null }) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
   const isLoggedIn = !!session?.user;
   const role = session?.user?.role;
   const permissions = (session?.user?.permissions ?? null) as StaffPermissions | null;
+  const mustChangePassword = !!session?.user?.mustChangePassword;
+
+  // Force password change after admin reset / temporary password
+  if (isLoggedIn && mustChangePassword) {
+    const allowedWhileForced =
+      pathname === FORCE_CHANGE_PASSWORD_PATH ||
+      pathname.startsWith(`${FORCE_CHANGE_PASSWORD_PATH}/`);
+    if (!allowedWhileForced) {
+      return NextResponse.redirect(new URL(FORCE_CHANGE_PASSWORD_PATH, req.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Already changed — don't linger on the force-change page
+  if (isLoggedIn && !mustChangePassword && pathname.startsWith(FORCE_CHANGE_PASSWORD_PATH)) {
+    const dest =
+      role === "SUPER_ADMIN"
+        ? "/super-admin"
+        : role === "SCHOOL_ADMIN"
+          ? "/admin"
+          : "/dashboard";
+    return NextResponse.redirect(new URL(dest, req.url));
+  }
 
   // Redirect logged-in users away from auth pages
   if (isLoggedIn && AUTH_ROUTES.some((r) => pathname.startsWith(r))) {

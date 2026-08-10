@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: RouteContext) {
           passwordHash,
           failedLoginAttempts: 0,
           lockedUntil: null,
+          mustChangePassword: true,
         },
       }),
       db.auditLog.create({

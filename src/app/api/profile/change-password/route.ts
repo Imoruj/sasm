@@ -4,6 +4,16 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
+import {
+  DEFAULT_APPLICANT_PASSWORD,
+  DEFAULT_STAFF_PASSWORDS,
+} from "@/constants/staff";
+
+const FORBIDDEN_DEFAULT_PASSWORDS = new Set<string>([
+  DEFAULT_APPLICANT_PASSWORD,
+  DEFAULT_STAFF_PASSWORDS.SCHOOL_ADMIN,
+  DEFAULT_STAFF_PASSWORDS.SUPER_ADMIN,
+]);
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
@@ -34,13 +44,23 @@ export async function POST(req: Request) {
 
     const { currentPassword, newPassword } = validated.data;
 
-    // Fetch user with password hash
+    if (FORBIDDEN_DEFAULT_PASSWORDS.has(newPassword)) {
+      return NextResponse.json(
+        err(
+          "DEFAULT_PASSWORD",
+          "Choose a new password that is different from the system default",
+        ),
+        { status: 400 },
+      );
+    }
+
     const user = await db.user.findUnique({
       where: { id: session.user.id },
       select: {
         id: true,
         passwordHash: true,
         organizationId: true,
+        mustChangePassword: true,
       },
     });
 
@@ -51,7 +71,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isCurrentPasswordValid) {
       return NextResponse.json(
@@ -60,7 +79,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Prevent reusing the same password
     const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
     if (isSamePassword) {
       return NextResponse.json(
@@ -69,16 +87,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Hash new password
     const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password
     await db.user.update({
       where: { id: session.user.id },
-      data: { passwordHash: newPasswordHash },
+      data: { passwordHash: newPasswordHash, mustChangePassword: false },
     });
 
-    // Write audit log
     const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
     await db.auditLog.create({
       data: {
@@ -87,7 +102,9 @@ export async function POST(req: Request) {
         action: "PASSWORD_CHANGED",
         entityType: "User",
         entityId: session.user.id,
-        changes: undefined,
+        changes: user.mustChangePassword
+          ? { note: "Forced password change after default reset" }
+          : undefined,
         ipAddress: ip,
         userAgent: req.headers.get("user-agent") ?? undefined,
       },

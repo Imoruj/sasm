@@ -13,6 +13,7 @@ declare module "next-auth" {
       branchId: string | null;
       permissions: StaffPermissions;
       isActive: boolean;
+      mustChangePassword: boolean;
       updatedAt: string;
     };
   }
@@ -21,6 +22,7 @@ declare module "next-auth" {
     role: UserRole;
     organizationId: string | null;
     branchId: string | null;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -35,6 +37,7 @@ declare module "next-auth/jwt" {
     picture?: string | null;
     permissions?: StaffPermissions;
     isActive?: boolean;
+    mustChangePassword?: boolean;
     updatedAt?: string;
   }
 }

@@ -28,7 +28,18 @@ const changePasswordSchema = z
 
 type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
 
-export default function ChangePasswordForm() {
+interface ChangePasswordFormProps {
+  /** When true, copy emphasizes forced reset after default password. */
+  forced?: boolean;
+  submitLabel?: string;
+  onSuccess?: () => void | Promise<void>;
+}
+
+export default function ChangePasswordForm({
+  forced = false,
+  submitLabel = "Change Password",
+  onSuccess,
+}: ChangePasswordFormProps = {}) {
   const {
     register,
     handleSubmit,
@@ -86,13 +97,20 @@ export default function ChangePasswordForm() {
             ? "Current password is incorrect"
             : json.error?.code === "SAME_PASSWORD"
               ? "New password must be different from your current password"
+              : json.error?.code === "DEFAULT_PASSWORD"
+                ? "Choose a password that is not the system default"
               : json.error?.message ?? "Failed to change password";
         toast.error(message);
         return;
       }
 
-      toast.success("Password changed successfully. Please log in again if prompted.");
+      toast.success(
+        forced
+          ? "Password updated. Redirecting you to your account..."
+          : "Password changed successfully. Please log in again if prompted.",
+      );
       reset();
+      await onSuccess?.();
     } catch {
       toast.error("Something went wrong. Please try again.");
     }
@@ -102,13 +120,16 @@ export default function ChangePasswordForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 max-w-md">
       <div className="space-y-2">
         <Label htmlFor="currentPassword">
-          Current Password <span className="text-red-500">*</span>
+          {forced ? "Temporary password" : "Current Password"}{" "}
+          <span className="text-red-500">*</span>
         </Label>
         <Input
           id="currentPassword"
           type="password"
           autoComplete="current-password"
-          placeholder="Enter your current password"
+          placeholder={
+            forced ? "Enter the temporary/default password" : "Enter your current password"
+          }
           {...register("currentPassword")}
           className={
             errors.currentPassword ? "border-red-400 focus-visible:ring-red-400" : ""
@@ -215,7 +236,7 @@ export default function ChangePasswordForm() {
           ) : (
             <>
               <Lock className="h-4 w-4" />
-              Change Password
+              {submitLabel}
             </>
           )}
         </Button>

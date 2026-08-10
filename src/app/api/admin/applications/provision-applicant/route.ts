@@ -82,6 +82,7 @@ export async function POST(req: Request) {
         role: "APPLICANT",
         emailVerified: true, // admin-created accounts skip OTP verification
         isActive: true,
+        mustChangePassword: true,
       },
       select: { id: true },
     });

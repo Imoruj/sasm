@@ -78,6 +78,7 @@ export async function POST(req: Request, { params }: RouteContext) {
           // Unlock account in case it was locked due to failed attempts
           failedLoginAttempts: 0,
           lockedUntil: null,
+          mustChangePassword: true,
         },
       }),
       db.auditLog.create({
