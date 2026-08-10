@@ -26,10 +26,6 @@ export async function POST(req: Request, { params }: RouteContext) {
         id: userId,
         role: "APPLICANT",
         deletedAt: null,
-        OR: [
-          { organizationId: orgId },
-          { applications: { some: { organizationId: orgId } } },
-        ],
       },
       select: { id: true, email: true, firstName: true, lastName: true },
     });

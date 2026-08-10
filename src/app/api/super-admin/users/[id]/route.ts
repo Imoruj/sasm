@@ -14,16 +14,12 @@ const updateUserSchema = z.object({
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-async function findOrgApplicant(userId: string, orgId: string) {
+async function findApplicant(userId: string) {
   return db.user.findFirst({
     where: {
       id: userId,
       role: "APPLICANT",
       deletedAt: null,
-      OR: [
-        { organizationId: orgId },
-        { applications: { some: { organizationId: orgId } } },
-      ],
     },
   });
 }
@@ -39,7 +35,6 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     }
 
     const { id: userId } = await params;
-    const orgId = session.user.organizationId ?? "";
     const body = await req.json();
     const validated = updateUserSchema.safeParse(body);
     if (!validated.success) {
@@ -49,7 +44,7 @@ export async function PATCH(req: Request, { params }: RouteContext) {
       );
     }
 
-    const existing = await findOrgApplicant(userId, orgId);
+    const existing = await findApplicant(userId);
     if (!existing) {
       return NextResponse.json(err("NOT_FOUND", "User account not found"), { status: 404 });
     }
@@ -140,9 +135,8 @@ export async function DELETE(req: Request, { params }: RouteContext) {
     }
 
     const { id: userId } = await params;
-    const orgId = session.user.organizationId ?? "";
 
-    const existing = await findOrgApplicant(userId, orgId);
+    const existing = await findApplicant(userId);
     if (!existing) {
       return NextResponse.json(err("NOT_FOUND", "User account not found"), { status: 404 });
     }

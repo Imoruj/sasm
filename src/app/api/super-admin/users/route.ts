@@ -3,18 +3,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ok, err } from "@/types/api";
 
-/** Applicants linked to this org via applications (or organizationId if set). */
-function applicantOrgWhere(orgId: string) {
-  return {
-    role: "APPLICANT" as const,
-    deletedAt: null,
-    OR: [
-      { organizationId: orgId },
-      { applications: { some: { organizationId: orgId } } },
-    ],
-  };
-}
-
 export async function GET() {
   try {
     const session = await auth();
@@ -26,10 +14,12 @@ export async function GET() {
     }
 
     const orgId = session.user.organizationId ?? "";
-    const where = applicantOrgWhere(orgId);
 
     const users = await db.user.findMany({
-      where,
+      where: {
+        role: "APPLICANT",
+        deletedAt: null,
+      },
       select: {
         id: true,
         email: true,

@@ -19,10 +19,6 @@ export default async function UsersPage() {
     where: {
       role: "APPLICANT",
       deletedAt: null,
-      OR: [
-        { organizationId: orgId },
-        { applications: { some: { organizationId: orgId } } },
-      ],
     },
     select: {
       id: true,
