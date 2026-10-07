@@ -58,7 +58,17 @@ export function createCsv(rows: ApplicationExportRow[]): Uint8Array {
 }
 
 function xmlEscape(value: string): string {
-  return value
+  const validXmlCharacters = Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0)!;
+      return codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d ||
+        (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+        (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+        (codePoint >= 0x10000 && codePoint <= 0x10ffff);
+    })
+    .join("");
+
+  return validXmlCharacters
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -228,7 +238,7 @@ export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
       contents:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+        '<fonts count="2"><font><name val="Calibri"/><sz val="11"/></font><font><name val="Calibri"/><b/><color rgb="FFFFFFFF"/><sz val="11"/></font></fonts>' +
         '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B4332"/><bgColor indexed="64"/></patternFill></fill></fills>' +
         '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
