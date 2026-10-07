@@ -7,6 +7,7 @@ export interface ApplicationExportRow {
   session: string;
   status: string;
   updatedAt: Date;
+  details: Record<string, string>;
 }
 
 const HEADERS = [
@@ -20,17 +21,30 @@ const HEADERS = [
   "Updated",
 ];
 
-function cellValues(row: ApplicationExportRow): string[] {
-  return [
-    row.applicationNumber,
-    row.studentName,
-    row.email,
-    row.campus,
-    row.className,
-    row.session,
-    row.status,
-    row.updatedAt.toISOString().slice(0, 10),
-  ];
+function headersForRows(rows: ApplicationExportRow[]): string[] {
+  const detailHeaders = new Set<string>();
+  rows.forEach((row) => Object.keys(row.details).forEach((header) => detailHeaders.add(header)));
+  return [...HEADERS, ...detailHeaders];
+}
+
+function cellValues(row: ApplicationExportRow, headers: string[]): string[] {
+  const summary: Record<string, string> = {
+    "Application #": row.applicationNumber,
+    Student: row.studentName,
+    Email: row.email,
+    Campus: row.campus,
+    Class: row.className,
+    Session: row.session,
+    Status: row.status,
+    Updated: row.updatedAt.toISOString().slice(0, 10),
+  };
+
+  return headers.map((header) => summary[header] ?? row.details[header] ?? "");
+}
+
+function exportMatrix(rows: ApplicationExportRow[]): string[][] {
+  const headers = headersForRows(rows);
+  return [headers, ...rows.map((row) => cellValues(row, headers))];
 }
 
 function csvCell(value: string): string {
@@ -39,7 +53,7 @@ function csvCell(value: string): string {
 }
 
 export function createCsv(rows: ApplicationExportRow[]): Uint8Array {
-  const lines = [HEADERS, ...rows.map(cellValues)].map((line) => line.map(csvCell).join(","));
+  const lines = exportMatrix(rows).map((line) => line.map(csvCell).join(","));
   return new TextEncoder().encode("\uFEFF" + lines.join("\r\n"));
 }
 
@@ -50,6 +64,17 @@ function xmlEscape(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function excelColumnName(index: number): string {
+  let column = index + 1;
+  let name = "";
+  while (column > 0) {
+    const remainder = (column - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    column = Math.floor((column - 1) / 26);
+  }
+  return name;
 }
 
 function concatBytes(parts: Uint8Array[]): Uint8Array {
@@ -145,12 +170,12 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
 }
 
 export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
-  const rowValues = [HEADERS, ...rows.map(cellValues)];
+  const rowValues = exportMatrix(rows);
   const worksheetRows = rowValues
     .map((values, rowIndex) => {
       const cells = values
         .map((value, columnIndex) => {
-          const reference = String.fromCharCode(65 + columnIndex) + String(rowIndex + 1);
+          const reference = excelColumnName(columnIndex) + String(rowIndex + 1);
           const style = rowIndex === 0 ? ' s="1"' : "";
           return '<c r="' + reference + '" t="inlineStr"' + style + "><is><t xml:space=\"preserve\">" +
             xmlEscape(value) +
@@ -215,7 +240,6 @@ export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
       contents:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<cols><col min="1" max="1" width="22" customWidth="1"/><col min="2" max="2" width="28" customWidth="1"/><col min="3" max="3" width="32" customWidth="1"/><col min="4" max="4" width="24" customWidth="1"/><col min="5" max="6" width="16" customWidth="1"/><col min="7" max="8" width="18" customWidth="1"/></cols>' +
         "<sheetData>" +
         worksheetRows +
         "</sheetData></worksheet>",
@@ -225,15 +249,16 @@ export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
   return zipStored(files);
 }
 
-function pdfSafe(value: string, maxCharacters: number): string {
-  const normalized = value
+function pdfSafe(value: string): string {
+  return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[–—]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, "...")
     .replace(/[^\x20-\x7e]/g, "?")
     .replace(/[\\()]/g, "\\$&");
-  return normalized.length > maxCharacters
-    ? normalized.slice(0, Math.max(1, maxCharacters - 1)) + "."
-    : normalized;
 }
 
 function pdfText(value: string, x: number, y: number, size = 8): string {
@@ -241,70 +266,103 @@ function pdfText(value: string, x: number, y: number, size = 8): string {
     " Td (" + value + ") Tj ET\n";
 }
 
-export function createPdf(rows: ApplicationExportRow[], title: string): Uint8Array {
-  const columns = [
-    { label: "Application #", width: 108, max: 20 },
-    { label: "Student", width: 150, max: 28 },
-    { label: "Campus", width: 124, max: 23 },
-    { label: "Class", width: 95, max: 18 },
-    { label: "Session", width: 85, max: 16 },
-    { label: "Status", width: 110, max: 20 },
-    { label: "Updated", width: 98, max: 16 },
-  ];
-  const left = 36;
-  const rowsPerPage = 34;
-  const pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage));
-  const pageContent: string[] = [];
+function wrapText(value: string, maxCharacters: number): string[] {
+  const words = value.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
 
-  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-    const pageRows = rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
-    let content = "0.82 w\n";
-    content += pdfText(pdfSafe(title, 72), left, 558, 15);
-    content += pdfText(
-      pdfSafe(String(rows.length) + " records  |  Page " + String(pageIndex + 1) + " of " + String(pageCount), 90),
-      left,
-      541,
-      8,
-    );
-
-    let x = left;
-    for (const column of columns) {
-      content += pdfText(pdfSafe(column.label, column.max), x + 3, 518, 8);
-      x += column.width;
+  for (const word of words) {
+    if (word.length > maxCharacters) {
+      if (line) lines.push(line);
+      line = "";
+      for (let offset = 0; offset < word.length; offset += maxCharacters) {
+        const chunk = word.slice(offset, offset + maxCharacters);
+        if (chunk.length === maxCharacters) lines.push(chunk);
+        else line = chunk;
+      }
+      continue;
     }
-    content += "36 510 m 806 510 l S\n";
+    if (line && line.length + word.length + 1 > maxCharacters) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? line + " " + word : word;
+    }
+  }
 
-    pageRows.forEach((row, rowIndex) => {
-      const values = [
-        row.applicationNumber,
-        row.studentName,
-        row.campus,
-        row.className,
-        row.session,
-        row.status,
-        row.updatedAt.toISOString().slice(0, 10),
-      ];
-      const y = 494 - rowIndex * 13;
-      let cellX = left;
-      values.forEach((value, columnIndex) => {
-        content += pdfText(pdfSafe(value, columns[columnIndex].max), cellX + 3, y, 8);
-        cellX += columns[columnIndex].width;
-      });
-      content += String(left) + " " + String(y - 5) + " m 806 " + String(y - 5) + " l S\n";
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+export function createPdf(rows: ApplicationExportRow[], title: string): Uint8Array {
+  const pageContent: string[] = [];
+  let content = "0.82 w\n";
+  let y = 0;
+
+  const startPage = (studentIndex: number, row: ApplicationExportRow, continued: boolean) => {
+    content = "0.82 w\n";
+    content += pdfText(pdfSafe(title), 36, 558, 15);
+    const studentHeader =
+      "Student " + String(studentIndex + 1) + " of " + String(rows.length) +
+      "  |  " + row.applicationNumber + "  |  " + row.studentName +
+      (continued ? "  (continued)" : "");
+    content += pdfText(pdfSafe(studentHeader), 36, 540, 9);
+    content += "36 529 m 806 529 l S\n";
+    y = 512;
+  };
+
+  rows.forEach((row, rowIndex) => {
+    startPage(rowIndex, row, false);
+    const fields = [
+      ["Application #", row.applicationNumber],
+      ["Student", row.studentName],
+      ["Email", row.email],
+      ["Campus", row.campus],
+      ["Class", row.className],
+      ["Session", row.session],
+      ["Status", row.status],
+      ["Updated", row.updatedAt.toISOString().slice(0, 10)],
+      ...Object.entries(row.details),
+    ].filter(([, value]) => value !== "");
+
+    fields.forEach(([label, value]) => {
+      const labelLines = wrapText(label, 30);
+      const valueLines = wrapText(value, 108);
+      const lineCount = Math.max(labelLines.length, valueLines.length);
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+        if (y - 11 < 48) {
+          pageContent.push(content);
+          startPage(rowIndex, row, true);
+          content += pdfText(pdfSafe(label + " (continued)"), 39, y, 8);
+        } else if (labelLines[lineIndex]) {
+          content += pdfText(pdfSafe(labelLines[lineIndex]), 39, y, 8);
+        }
+        if (valueLines[lineIndex]) {
+          content += pdfText(pdfSafe(valueLines[lineIndex]), 230, y, 8);
+        }
+        y -= 11;
+      }
+      y -= 4;
+      content += "36 " + String(y + 2) + " m 806 " + String(y + 2) + " l S\n";
     });
-    content += pdfText("SAMS  |  Student applications", left, 27, 7);
-    content += pdfText(
-      "Generated " + new Date().toISOString().slice(0, 10),
-      700,
-      27,
-      7,
-    );
+    pageContent.push(content);
+  });
+
+  if (rows.length === 0) {
+    content += pdfText(pdfSafe(title), 36, 558, 15);
+    content += pdfText("No student records found.", 36, 530, 10);
     pageContent.push(content);
   }
 
+  const generatedDate = new Date().toISOString().slice(0, 10);
+  const pageCount = pageContent.length;
+  const pagesWithFooters = pageContent.map((page, index) => page +
+    pdfText("SAMS  |  Student applications", 36, 27, 7) +
+    pdfText("Generated " + generatedDate + "  |  Page " + String(index + 1) + " of " + String(pageCount), 590, 27, 7));
+
   const encoder = new TextEncoder();
   const objectContents: string[] = [];
-  const pageObjectIds = pageContent.map((_, index) => 4 + index * 2);
+  const pageObjectIds = pagesWithFooters.map((_, index) => 4 + index * 2);
   objectContents.push("<< /Type /Catalog /Pages 2 0 R >>");
   objectContents.push(
     "<< /Type /Pages /Kids [" + pageObjectIds.map((id) => String(id) + " 0 R").join(" ") +
@@ -312,15 +370,15 @@ export function createPdf(rows: ApplicationExportRow[], title: string): Uint8Arr
   );
   objectContents.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
 
-  pageContent.forEach((content, index) => {
+  pagesWithFooters.forEach((page, index) => {
     const pageId = 4 + index * 2;
     const streamId = pageId + 1;
-    const streamLength = encoder.encode(content).length;
+    const streamLength = encoder.encode(page).length;
     objectContents.push(
       "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents " +
         String(streamId) + " 0 R >>",
     );
-    objectContents.push("<< /Length " + String(streamLength) + " >>\nstream\n" + content + "endstream");
+    objectContents.push("<< /Length " + String(streamLength) + " >>\nstream\n" + page + "endstream");
   });
 
   let pdf = "%PDF-1.4\n";
