@@ -187,18 +187,35 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
 
 export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
   const rowValues = exportMatrix(rows);
+  const headers = rowValues[0] ?? HEADERS;
+  const lastColumn = excelColumnName(headers.length - 1);
+  const preferredWidths = [24, 34, 36, 25, 18, 19, 20, 18];
+  const columnsXml = headers
+    .map((header, columnIndex) => {
+      const longestValue = rowValues.reduce(
+        (longest, row) => Math.max(longest, Array.from(row[columnIndex] ?? "").length),
+        header.length,
+      );
+      const preferred = preferredWidths[columnIndex] ?? 28;
+      const width = Math.min(48, Math.max(preferred, Math.min(longestValue + 2, 48)));
+      const excelColumn = columnIndex + 1;
+      return '<col min="' + String(excelColumn) + '" max="' + String(excelColumn) +
+        '" width="' + String(width) + '" customWidth="1"/>';
+    })
+    .join("");
   const worksheetRows = rowValues
     .map((values, rowIndex) => {
       const cells = values
         .map((value, columnIndex) => {
           const reference = excelColumnName(columnIndex) + String(rowIndex + 1);
-          const style = rowIndex === 0 ? ' s="1"' : "";
+          const style = rowIndex === 0 ? ' s="1"' : ' s="2"';
           return '<c r="' + reference + '" t="inlineStr"' + style + "><is><t xml:space=\"preserve\">" +
             xmlEscape(value) +
             "</t></is></c>";
         })
         .join("");
-      return '<row r="' + String(rowIndex + 1) + '">' + cells + "</row>";
+      const headerHeight = rowIndex === 0 ? ' ht="36" customHeight="1"' : "";
+      return '<row r="' + String(rowIndex + 1) + '"' + headerHeight + '>' + cells + "</row>";
     })
     .join("");
 
@@ -244,11 +261,11 @@ export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
       contents:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-        '<fonts count="2"><font><name val="Calibri"/><sz val="11"/></font><font><name val="Calibri"/><b/><color rgb="FFFFFFFF"/><sz val="11"/></font></fonts>' +
-        '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B4332"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+        '<fonts count="2"><font><name val="Calibri"/><sz val="11"/></font><font><name val="Calibri"/><b/><color rgb="FF1B4332"/><sz val="11"/></font></fonts>' +
+        '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8F3ED"/><bgColor indexed="64"/></patternFill></fill></fills>' +
         '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-        '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>' +
+        '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>' +
         '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>',
     },
     {
@@ -256,9 +273,13 @@ export function createXlsx(rows: ApplicationExportRow[]): Uint8Array {
       contents:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        '<dimension ref="A1:' + lastColumn + String(rowValues.length) + '"/>' +
+        '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>' +
+        '<sheetFormatPr defaultRowHeight="18"/>' +
+        '<cols>' + columnsXml + '</cols>' +
         "<sheetData>" +
         worksheetRows +
-        "</sheetData></worksheet>",
+        "</sheetData><autoFilter ref=\"A1:" + lastColumn + String(rowValues.length) + "\"/></worksheet>",
     },
   ];
 
