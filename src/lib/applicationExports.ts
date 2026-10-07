@@ -121,6 +121,9 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
   const encoder = new TextEncoder();
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
+  // ZIP requires a valid DOS date; zero is outside the representable calendar range.
+  const zipTime = 0;
+  const zipDate = 0x0021; // 1980-01-01
   let localOffset = 0;
 
   for (const file of files) {
@@ -132,7 +135,8 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
       littleEndian(20, 2),
       littleEndian(0x0800, 2),
       littleEndian(0, 2),
-      littleEndian(0, 2),
+      littleEndian(zipTime, 2),
+      littleEndian(zipDate, 2),
       littleEndian(crc, 4),
       littleEndian(contents.length, 4),
       littleEndian(contents.length, 4),
@@ -148,7 +152,8 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
       littleEndian(20, 2),
       littleEndian(0x0800, 2),
       littleEndian(0, 2),
-      littleEndian(0, 2),
+      littleEndian(zipTime, 2),
+      littleEndian(zipDate, 2),
       littleEndian(crc, 4),
       littleEndian(contents.length, 4),
       littleEndian(contents.length, 4),
