@@ -161,6 +161,7 @@ function zipStored(files: Array<{ name: string; contents: string }>): Uint8Array
       littleEndian(0, 2),
       littleEndian(0, 2),
       littleEndian(0, 2),
+      littleEndian(0, 2),
       littleEndian(0, 4),
       littleEndian(localOffset, 4),
       name,
